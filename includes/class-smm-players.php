@@ -18,11 +18,20 @@ class SMM_Players {
         ));
     }
 
+    public static function get_by_team($team_id, $only_active = true) {
+        global $wpdb;
+        $sql = $wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}soccer_players WHERE team_id = %d", $team_id
+        );
+        if ($only_active) $sql .= " AND is_active = 1";
+        $sql .= " ORDER BY player_name ASC";
+        return $wpdb->get_results($sql);
+    }
+
     public static function add($name, $email = '', $team_id = 0) {
         global $wpdb;
         $name = sanitize_text_field($name);
         if (empty($name)) return false;
-
         return $wpdb->insert($wpdb->prefix . 'soccer_players', array(
             'player_name'  => $name,
             'player_email' => sanitize_email($email),

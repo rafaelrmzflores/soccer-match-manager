@@ -17,7 +17,7 @@
   font-size: 12px;
 }
 .smm-players-checkboxes {
-  max-height: 420px;
+  max-height: 480px;
   overflow-y: auto;
   border: 1px solid #ddd;
   padding: 12px;
@@ -32,6 +32,18 @@
 }
 .smm-player-group:last-child {
   border-bottom: none;
+}
+.smm-auto-note {
+  color: #1e7e34;
+  background: #eaf7ee;
+  padding: 8px 10px;
+  border-left: 3px solid #28a745;
+  border-radius: 3px;
+  margin-bottom: 8px;
+}
+.smm-player-line.smm-auto-checked {
+  background: #eaf7ee;
+  border-radius: 3px;
 }
 .smm-players-layout {
   display: grid;
@@ -85,4 +97,8 @@
   border-radius: 12px;
   margin: 2px 4px 2px 0;
   font-size: 12px;
+}
+.smm-attendee-auto {
+  background: #eaf7ee;
+  border: 1px dashed #88c79a;
 }

@@ -16,15 +16,14 @@ class SMM_Teams {
     }
 
     public static function get_name($id) {
-        $team = self::get($id);
-        return $team ? $team->team_name : '';
+        $t = self::get($id);
+        return $t ? $t->team_name : '';
     }
 
     public static function add($name, $logo_id = 0) {
         global $wpdb;
         $name = sanitize_text_field($name);
         if (empty($name)) return false;
-
         return $wpdb->insert($wpdb->prefix . 'soccer_teams', array(
             'team_name'    => $name,
             'team_logo_id' => intval($logo_id)
@@ -46,42 +45,21 @@ class SMM_Teams {
     public static function delete($id) {
         global $wpdb;
         $id = intval($id);
-
-        // Detach from players
-        $wpdb->update(
-            $wpdb->prefix . 'soccer_players',
-            array('team_id' => 0),
-            array('team_id' => $id)
-        );
-
-        // Detach from matches (set FK to 0 but keep text fallback)
+        $wpdb->update($wpdb->prefix . 'soccer_players',
+            array('team_id' => 0), array('team_id' => $id));
         $wpdb->query($wpdb->prepare(
-            "UPDATE {$wpdb->prefix}soccer_matches
-             SET home_team_id = 0
-             WHERE home_team_id = %d", $id
-        ));
+            "UPDATE {$wpdb->prefix}soccer_matches SET home_team_id = 0 WHERE home_team_id = %d", $id));
         $wpdb->query($wpdb->prepare(
-            "UPDATE {$wpdb->prefix}soccer_matches
-             SET away_team_id = 0
-             WHERE away_team_id = %d", $id
-        ));
-
+            "UPDATE {$wpdb->prefix}soccer_matches SET away_team_id = 0 WHERE away_team_id = %d", $id));
         return $wpdb->delete($wpdb->prefix . 'soccer_teams', array('id' => $id), array('%d'));
     }
 
-    /**
-     * Returns the HTML for a team name with logo (used in admin/frontend).
-     */
     public static function get_logo_html($team, $size = 'thumbnail', $class = 'smm-team-logo') {
-        if (!$team || empty($team->team_logo_id)) {
-            return '';
-        }
-        $img = wp_get_attachment_image(
-            $team->team_logo_id,
-            $size,
-            false,
-            array('class' => $class, 'alt' => esc_attr($team->team_name))
-        );
+        if (!$team || empty($team->team_logo_id)) return '';
+        $img = wp_get_attachment_image($team->team_logo_id, $size, false, array(
+            'class' => $class,
+            'alt'   => esc_attr($team->team_name)
+        ));
         return $img ?: '';
     }
 }

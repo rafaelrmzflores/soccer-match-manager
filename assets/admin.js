@@ -1,9 +1,8 @@
 jQuery(function ($) {
-  /* ---- Logo picker (WP media uploader) ---- */
+  /* ---- Logo picker ---- */
   $(document).on("click", ".smm-upload-logo", function (e) {
     e.preventDefault();
-    const button = $(this);
-    const wrap = button.closest(".smm-logo-picker");
+    const wrap = $(this).closest(".smm-logo-picker");
 
     const frame = wp.media({
       title: "Select Team Logo",
@@ -33,7 +32,6 @@ jQuery(function ($) {
     frame.open();
   });
 
-  /* ---- Remove logo ---- */
   $(document).on("click", ".smm-remove-logo", function (e) {
     e.preventDefault();
     const wrap = $(this).closest(".smm-logo-picker");
@@ -42,7 +40,55 @@ jQuery(function ($) {
     $(this).hide();
   });
 
-  /* ---- Hover on conflict rows ---- */
+  /* ---- Auto-check players based on selected teams ---- */
+  function refreshAutoPlayers() {
+    const homeId = $("#home_team_id").val();
+    const awayId = $("#away_team_id").val();
+    const teamIds = [homeId, awayId].filter(Boolean).map(String);
+
+    $(".smm-player-line").each(function () {
+      const line = $(this);
+      const checkbox = line.find('input[type="checkbox"]');
+      const playerTeam = String(checkbox.data("team"));
+
+      const matchesTeam = teamIds.indexOf(playerTeam) !== -1;
+      const sameTeamTwice =
+        homeId && awayId && homeId === awayId && playerTeam === String(homeId);
+
+      if (matchesTeam) {
+        // Auto-check if not already checked by user preference
+        if (!checkbox.data("user-touched")) {
+          checkbox.prop("checked", true);
+        }
+        line.addClass("smm-auto-checked");
+      } else {
+        // Not part of either team — leave as-is (user may have manually picked)
+        if (!checkbox.data("user-touched") && !checkbox.is(":checked")) {
+          // keep unchecked
+        }
+        line.removeClass("smm-auto-checked");
+      }
+    });
+  }
+
+  // Mark user-touched checkboxes
+  $(document).on(
+    "change",
+    '.smm-player-line input[type="checkbox"]',
+    function () {
+      $(this).data("user-touched", true);
+    },
+  );
+
+  // Team dropdowns trigger refresh
+  $(document).on("change", ".smm-team-select", refreshAutoPlayers);
+
+  // Run on page load (new match form will start empty; edit form re-checks based on teams)
+  if ($("#smm-match-form").length) {
+    refreshAutoPlayers();
+  }
+
+  /* ---- Conflict hover ---- */
   $(".smm-has-conflict").hover(
     function () {
       $(this).css("background-color", "#ffe69c");
