@@ -1,0 +1,20 @@
+.smm-has-conflict {
+  background-color: #fff3cd !important;
+}
+
+.smm-conflict-warning {
+  color: #856404;
+  background-color: #fff3cd;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: help;
+}
+
+.smm-no-conflict {
+  color: #155724;
+  background-color: #d4edda;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+}
