@@ -17,16 +17,25 @@
   font-size: 12px;
 }
 .smm-players-checkboxes {
-  max-height: 300px;
+  max-height: 420px;
   overflow-y: auto;
   border: 1px solid #ddd;
-  padding: 10px;
+  padding: 12px;
   border-radius: 4px;
   background: #fafafa;
+  max-width: 500px;
+}
+.smm-player-group {
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed #e0e0e0;
+}
+.smm-player-group:last-child {
+  border-bottom: none;
 }
 .smm-players-layout {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 340px 1fr;
   gap: 24px;
   margin-top: 16px;
 }
@@ -41,4 +50,39 @@
   border: 1px solid #ccd0d4;
   border-radius: 4px;
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+  align-self: start;
+}
+.smm-logo-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.smm-logo-preview img {
+  max-width: 100px;
+  max-height: 100px;
+  display: block;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #f6f7f7;
+}
+.smm-team-cell {
+  vertical-align: middle;
+}
+.smm-team-cell img {
+  vertical-align: middle;
+  margin-right: 6px;
+}
+.smm-player-mini-logo {
+  vertical-align: middle;
+  margin-right: 4px;
+  border-radius: 50%;
+}
+.smm-attendee {
+  display: inline-flex;
+  align-items: center;
+  background: #eef2f5;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin: 2px 4px 2px 0;
+  font-size: 12px;
 }

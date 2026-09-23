@@ -1,11 +1,6 @@
 <?php
 class SMM_Conflict_Checker {
 
-    /**
-     * Detect conflicts for a match. Two matches conflict if:
-     * - Same date, and their times are within 2 hours, and they share at least one attending player
-     * - Same date, same location, and they share at least one attending player
-     */
     public function check_match_conflicts($match_id) {
         global $wpdb;
         $matches_table = $wpdb->prefix . 'soccer_matches';
@@ -28,7 +23,6 @@ class SMM_Conflict_Checker {
             $shared = array_intersect($my_players, $other_players);
             if (empty($shared)) continue;
 
-            // Get player names for the shared ids
             $names = array();
             foreach ($shared as $pid) {
                 $p = SMM_Players::get($pid);
@@ -41,18 +35,20 @@ class SMM_Conflict_Checker {
 
             $same_location = (strcasecmp(trim($match->location), trim($other->location)) === 0);
 
+            $home = $other->home_team_id ? SMM_Teams::get_name($other->home_team_id) : $other->home_team;
+            $away = $other->away_team_id ? SMM_Teams::get_name($other->away_team_id) : $other->away_team;
+
             if ($hours_apart < 2) {
                 $conflicts[] = sprintf(
                     'Time clash (%s vs %s at %s) — shared: %s',
-                    $other->home_team, $other->away_team,
+                    $home, $away,
                     date('g:i A', strtotime($other->match_time)),
                     implode(', ', $names)
                 );
             } elseif ($same_location) {
                 $conflicts[] = sprintf(
                     'Same location (%s) as %s vs %s at %s — shared: %s',
-                    $other->location,
-                    $other->home_team, $other->away_team,
+                    $other->location, $home, $away,
                     date('g:i A', strtotime($other->match_time)),
                     implode(', ', $names)
                 );

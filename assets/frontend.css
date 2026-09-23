@@ -2,14 +2,12 @@
   margin: 20px 0;
   overflow-x: auto;
 }
-
 .smm-matches-table {
   width: 100%;
   border-collapse: collapse;
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
-
 .smm-matches-table th {
   background: #f8f9fa;
   padding: 12px;
@@ -17,42 +15,52 @@
   font-weight: 600;
   border-bottom: 2px solid #dee2e6;
 }
-
 .smm-matches-table td {
   padding: 10px 12px;
   border-bottom: 1px solid #dee2e6;
+  vertical-align: middle;
 }
-
 .smm-matches-table tr:hover {
   background-color: #f8f9fa;
 }
-
 .smm-conflict-row {
   background-color: #fff3cd !important;
 }
-
+.smm-team-cell img {
+  vertical-align: middle;
+  margin-right: 6px;
+  max-height: 32px;
+  width: auto;
+}
+.smm-player-mini-logo {
+  vertical-align: middle;
+  margin-right: 4px;
+  border-radius: 50%;
+}
+.smm-attendee {
+  display: inline-flex;
+  align-items: center;
+  background: #eef2f5;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin: 2px 4px 2px 0;
+  font-size: 12px;
+}
 .smm-conflict-badge {
   background: #dc3545;
-  color: white;
+  color: #fff;
   padding: 3px 8px;
   border-radius: 3px;
   font-size: 12px;
   cursor: help;
 }
-
 .smm-ok-badge {
   background: #28a745;
-  color: white;
+  color: #fff;
   padding: 3px 8px;
   border-radius: 3px;
   font-size: 12px;
 }
-
-.smm-players {
-  font-size: 13px;
-  color: #666;
-}
-
 .smm-conflicts-container {
   background: #fff3cd;
   border: 1px solid #ffc107;
@@ -60,24 +68,49 @@
   padding: 20px;
   margin: 20px 0;
 }
-
 .smm-conflict-item {
-  background: white;
+  background: #fff;
   padding: 15px;
   margin: 10px 0;
   border-radius: 3px;
   border-left: 4px solid #dc3545;
 }
-
 .smm-conflict-item h4 {
   margin-top: 0;
   color: #dc3545;
 }
-
 .smm-no-conflicts {
   background: #d4edda;
   color: #155724;
   padding: 15px;
   border-radius: 5px;
   border: 1px solid #c3e6cb;
+}
+
+/* Teams grid shortcode */
+.smm-teams-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.smm-team-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+.smm-team-card-logo {
+  max-width: 80px;
+  max-height: 80px;
+  width: auto;
+  height: auto;
+  display: block;
+  margin: 0 auto 8px;
+}
+.smm-team-card h4 {
+  margin: 8px 0 0;
+  font-size: 15px;
 }

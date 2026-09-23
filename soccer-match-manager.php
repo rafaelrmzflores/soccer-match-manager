@@ -1,8 +1,8 @@
 <?php
 /**
  * Plugin Name: Soccer Match Manager
- * Description: Manage soccer matches with dynamic players and conflict detection
- * Version: 2.0.0
+ * Description: Manage soccer matches, teams, players, and detect conflicts
+ * Version: 3.0.0
  * Author: Your Name
  * License: GPL v2 or later
  * Text Domain: soccer-match-manager
@@ -10,11 +10,12 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('SMM_VERSION', '2.0.0');
+define('SMM_VERSION', '3.0.0');
 define('SMM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SMM_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 require_once SMM_PLUGIN_DIR . 'includes/class-smm-database.php';
+require_once SMM_PLUGIN_DIR . 'includes/class-smm-teams.php';
 require_once SMM_PLUGIN_DIR . 'includes/class-smm-players.php';
 require_once SMM_PLUGIN_DIR . 'includes/class-smm-admin.php';
 require_once SMM_PLUGIN_DIR . 'includes/class-smm-shortcode.php';
