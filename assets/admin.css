@@ -1,7 +1,6 @@
 .smm-has-conflict {
   background-color: #fff3cd !important;
 }
-
 .smm-conflict-warning {
   color: #856404;
   background-color: #fff3cd;
@@ -10,11 +9,36 @@
   font-size: 12px;
   cursor: help;
 }
-
 .smm-no-conflict {
   color: #155724;
   background-color: #d4edda;
   padding: 3px 8px;
   border-radius: 3px;
   font-size: 12px;
+}
+.smm-players-checkboxes {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  padding: 10px;
+  border-radius: 4px;
+  background: #fafafa;
+}
+.smm-players-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 24px;
+  margin-top: 16px;
+}
+@media (max-width: 900px) {
+  .smm-players-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.smm-player-form-wrap {
+  background: #fff;
+  padding: 16px;
+  border: 1px solid #ccd0d4;
+  border-radius: 4px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
 }
