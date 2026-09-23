@@ -3,23 +3,19 @@ jQuery(function ($) {
   $(document).on("click", ".smm-upload-logo", function (e) {
     e.preventDefault();
     const wrap = $(this).closest(".smm-logo-picker");
-
     const frame = wp.media({
       title: "Select Team Logo",
       button: { text: "Use this logo" },
       multiple: false,
       library: { type: "image" },
     });
-
     frame.on("select", function () {
       const attachment = frame.state().get("selection").first().toJSON();
       wrap.find('input[name="team_logo_id"]').val(attachment.id);
-
-      let url =
+      const url =
         attachment.sizes && attachment.sizes.thumbnail
           ? attachment.sizes.thumbnail.url
           : attachment.url;
-
       let preview = wrap.find(".smm-logo-preview");
       if (!preview.length) {
         wrap.prepend('<div class="smm-logo-preview"></div>');
@@ -28,10 +24,8 @@ jQuery(function ($) {
       preview.html('<img src="' + url + '" alt="">');
       wrap.find(".smm-remove-logo").show();
     });
-
     frame.open();
   });
-
   $(document).on("click", ".smm-remove-logo", function (e) {
     e.preventDefault();
     const wrap = $(this).closest(".smm-logo-picker");
@@ -45,33 +39,19 @@ jQuery(function ($) {
     const homeId = $("#home_team_id").val();
     const awayId = $("#away_team_id").val();
     const teamIds = [homeId, awayId].filter(Boolean).map(String);
-
     $(".smm-player-line").each(function () {
       const line = $(this);
       const checkbox = line.find('input[type="checkbox"]');
       const playerTeam = String(checkbox.data("team"));
-
       const matchesTeam = teamIds.indexOf(playerTeam) !== -1;
-      const sameTeamTwice =
-        homeId && awayId && homeId === awayId && playerTeam === String(homeId);
-
       if (matchesTeam) {
-        // Auto-check if not already checked by user preference
-        if (!checkbox.data("user-touched")) {
-          checkbox.prop("checked", true);
-        }
+        if (!checkbox.data("user-touched")) checkbox.prop("checked", true);
         line.addClass("smm-auto-checked");
       } else {
-        // Not part of either team — leave as-is (user may have manually picked)
-        if (!checkbox.data("user-touched") && !checkbox.is(":checked")) {
-          // keep unchecked
-        }
         line.removeClass("smm-auto-checked");
       }
     });
   }
-
-  // Mark user-touched checkboxes
   $(document).on(
     "change",
     '.smm-player-line input[type="checkbox"]',
@@ -79,14 +59,13 @@ jQuery(function ($) {
       $(this).data("user-touched", true);
     },
   );
-
-  // Team dropdowns trigger refresh
   $(document).on("change", ".smm-team-select", refreshAutoPlayers);
+  if ($("#smm-match-form").length) refreshAutoPlayers();
 
-  // Run on page load (new match form will start empty; edit form re-checks based on teams)
-  if ($("#smm-match-form").length) {
-    refreshAutoPlayers();
-  }
+  /* ---- Check all checkbox ---- */
+  $(document).on("change", "#smm-check-all", function () {
+    $('input[name="match_ids[]"]').prop("checked", $(this).is(":checked"));
+  });
 
   /* ---- Conflict hover ---- */
   $(".smm-has-conflict").hover(

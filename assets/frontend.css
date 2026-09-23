@@ -26,6 +26,10 @@
 .smm-conflict-row {
   background-color: #fff3cd !important;
 }
+.smm-canceled-row {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
 .smm-team-cell img {
   vertical-align: middle;
   margin-right: 6px;
@@ -53,13 +57,16 @@
   border-radius: 3px;
   font-size: 12px;
   cursor: help;
+  margin-left: 6px;
 }
-.smm-ok-badge {
-  background: #28a745;
+.smm-status-badge {
+  display: inline-block;
   color: #fff;
-  padding: 3px 8px;
-  border-radius: 3px;
-  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
 }
 .smm-conflicts-container {
   background: #fff3cd;
@@ -109,4 +116,18 @@
 .smm-team-card h4 {
   margin: 8px 0 0;
   font-size: 15px;
+}
+
+/* Availability */
+.smm-avail-available {
+  border-left: 3px solid #28a745;
+}
+.smm-avail-maybe {
+  border-left: 3px solid #ffc107;
+}
+.smm-avail-unavailable {
+  border-left: 3px solid #dc3545;
+}
+.smm-avail-injured {
+  border-left: 3px solid #6c757d;
 }

@@ -21,14 +21,15 @@ class SMM_Players {
     public static function get_by_team($team_id, $only_active = true) {
         global $wpdb;
         $sql = $wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}soccer_players WHERE team_id = %d", $team_id
+            "SELECT * FROM {$wpdb->prefix}soccer_players 
+             WHERE team_id = %d", $team_id
         );
         if ($only_active) $sql .= " AND is_active = 1";
         $sql .= " ORDER BY player_name ASC";
         return $wpdb->get_results($sql);
     }
 
-    public static function add($name, $email = '', $team_id = 0) {
+    public static function add($name, $email = '', $team_id = 0, $availability = 'available') {
         global $wpdb;
         $name = sanitize_text_field($name);
         if (empty($name)) return false;
@@ -36,11 +37,12 @@ class SMM_Players {
             'player_name'  => $name,
             'player_email' => sanitize_email($email),
             'team_id'      => intval($team_id),
+            'availability' => sanitize_key($availability),
             'is_active'    => 1
         ));
     }
 
-    public static function update($id, $name, $email, $team_id, $is_active) {
+    public static function update($id, $name, $email, $team_id, $availability, $is_active) {
         global $wpdb;
         return $wpdb->update(
             $wpdb->prefix . 'soccer_players',
@@ -48,6 +50,7 @@ class SMM_Players {
                 'player_name'  => sanitize_text_field($name),
                 'player_email' => sanitize_email($email),
                 'team_id'      => intval($team_id),
+                'availability' => sanitize_key($availability),
                 'is_active'    => $is_active ? 1 : 0
             ),
             array('id' => intval($id))

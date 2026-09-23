@@ -2,20 +2,13 @@
 class SMM_Conflict_Checker {
 
     /**
-     * Detect conflicts for a match.
+     * Conflict rules:
+     *  1. Time overlap (uses match_duration or 2h default)
+     *  2. Different locations only: gap < travel_time + buffer_a + buffer_b
+     *     (same location → no buffer needed)
      *
-     * A conflict exists between two matches on the same date that share at
-     * least one attending player if EITHER:
-     *
-     *   1. Their time slots overlap (start .. start + duration).
-     *   2. They are at DIFFERENT locations, and the gap between one ending and
-     *      the other starting is less than estimated travel time + the two
-     *      locations' travel buffers.
-     *
-     * Same-location matches only conflict on time overlap — no buffer
-     * required between back-to-back games at the same venue.
-     *
-     * If duration is not set, a 2-hour default slot is assumed.
+     * Only matches with status 'scheduled' or 'confirmed' participate.
+     * Only players whose availability is 'available' or 'maybe' count.
      */
     public function check_match_conflicts($match_id) {
         global $wpdb;
@@ -24,11 +17,17 @@ class SMM_Conflict_Checker {
         $match = SMM_Database::get_match($match_id);
         if (!$match) return array();
 
+        // Canceled/postponed matches never report conflicts
+        if (!SMM_Helpers::is_conflict_relevant($match->status)) return array();
+
         $my_players = array_map('intval', SMM_Database::get_attending_player_ids($match_id));
         if (empty($my_players)) return array();
 
         $others = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM $matches_table WHERE match_date = %s AND id != %d",
+            "SELECT * FROM $matches_table 
+             WHERE match_date = %s 
+               AND id != %d
+               AND status IN ('scheduled','confirmed')",
             $match->match_date, $match_id
         ));
 
@@ -48,20 +47,19 @@ class SMM_Conflict_Checker {
             $home = $other->home_team_id ? SMM_Teams::get_name($other->home_team_id) : $other->home_team;
             $away = $other->away_team_id ? SMM_Teams::get_name($other->away_team_id) : $other->away_team;
             $label = sprintf('%s vs %s at %s', $home, $away,
-                date('g:i A', strtotime($other->match_time)));
+                SMM_Helpers::fmt_time($other->match_time));
             $shared_txt = implode(', ', $names);
 
-            // --- Time slots ---
+            // Time slots — use site tz via helpers
             $dur_a = !empty($match->match_duration) ? intval($match->match_duration) : 120;
             $dur_b = !empty($other->match_duration) ? intval($other->match_duration) : 120;
 
-            $start_a = strtotime($match->match_date . ' ' . $match->match_time);
+            $start_a = SMM_Helpers::to_ts($match->match_date, $match->match_time);
             $end_a   = $start_a + ($dur_a * 60);
-
-            $start_b = strtotime($other->match_date . ' ' . $other->match_time);
+            $start_b = SMM_Helpers::to_ts($other->match_date, $other->match_time);
             $end_b   = $start_b + ($dur_b * 60);
 
-            // --- Rule 1: time overlap ---
+            // Rule 1: time overlap
             if (($start_a < $end_b) && ($start_b < $end_a)) {
                 $conflicts[] = sprintf(
                     'Time overlap with %s — shared: %s',
@@ -70,11 +68,10 @@ class SMM_Conflict_Checker {
                 continue;
             }
 
-            // --- Rule 2: travel-gap check (different locations only) ---
+            // Determine if same location
             $la = $match->location_id ? SMM_Locations::get($match->location_id) : null;
             $lb = $other->location_id ? SMM_Locations::get($other->location_id) : null;
 
-            // Determine if same location
             $same_location = false;
             if ($la && $lb && $la->id === $lb->id) {
                 $same_location = true;
@@ -83,10 +80,8 @@ class SMM_Conflict_Checker {
                 $same_location = true;
             }
 
-            // Same location → no buffer needed. Player can go straight from one to the next.
-            if ($same_location) {
-                continue;
-            }
+            // Same location → no buffer needed
+            if ($same_location) continue;
 
             // Different locations with coordinates → travel check
             if ($la && $lb && $la->latitude !== null && $lb->latitude !== null) {
@@ -99,7 +94,7 @@ class SMM_Conflict_Checker {
                     (float) $lb->latitude, (float) $lb->longitude
                 );
 
-                $travel_min = ($km / 40) * 60 + 5; // 40 km/h avg + 5 min overhead
+                $travel_min = ($km / 40) * 60 + 5;
                 $buffer = intval($la->travel_buffer_minutes) + intval($lb->travel_buffer_minutes);
                 $needed = $travel_min + $buffer;
 
@@ -119,11 +114,16 @@ class SMM_Conflict_Checker {
         $matches = SMM_Database::get_matches();
         $all = array();
         foreach ($matches as $m) {
+            if (!SMM_Helpers::is_conflict_relevant($m->status)) continue;
             $c = $this->check_match_conflicts($m->id);
             if (!empty($c)) {
                 $all[$m->id] = array('match' => $m, 'conflicts' => $c);
             }
         }
         return $all;
+    }
+
+    public function count_conflicts() {
+        return count($this->get_all_conflicts());
     }
 }

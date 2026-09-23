@@ -15,6 +15,7 @@ class SMM_Database {
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             team_name varchar(150) NOT NULL,
             team_logo_id bigint(20) DEFAULT 0,
+            default_duration smallint DEFAULT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             UNIQUE KEY team_name (team_name)
@@ -25,6 +26,7 @@ class SMM_Database {
             player_name varchar(100) NOT NULL,
             player_email varchar(150) DEFAULT '',
             team_id mediumint(9) DEFAULT 0,
+            availability varchar(20) DEFAULT 'available',
             is_active tinyint(1) DEFAULT 1,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
@@ -55,10 +57,15 @@ class SMM_Database {
             away_team varchar(150) DEFAULT '',
             location_id mediumint(9) DEFAULT 0,
             location varchar(255) NOT NULL,
+            status varchar(20) DEFAULT 'scheduled',
+            competition varchar(150) DEFAULT '',
+            round varchar(50) DEFAULT '',
+            notes text,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY match_date (match_date),
-            KEY location_id (location_id)
+            KEY location_id (location_id),
+            KEY status (status)
         ) $charset_collate;";
 
         $sql_attendance = "CREATE TABLE $attendance (
@@ -80,20 +87,71 @@ class SMM_Database {
         dbDelta($sql_matches);
         dbDelta($sql_attendance);
 
-        update_option('smm_db_version', SMM_VERSION);
+        // Backfill defaults for older rows (safe on fresh install too)
+        $wpdb->query("UPDATE $matches SET status = 'scheduled' WHERE status IS NULL OR status = ''");
+        $wpdb->query("UPDATE $players SET availability = 'available' WHERE availability IS NULL OR availability = ''");
     }
 
     /* ---------- Matches ---------- */
 
+    /**
+     * $args:
+     *  orderby, order, limit, where (raw, trusted), search, date_from, date_to,
+     *  team_id, location_id, status, only_conflicts (handled by caller)
+     */
     public static function get_matches($args = array()) {
         global $wpdb;
         $table = $wpdb->prefix . 'soccer_matches';
 
-        $defaults = array('orderby' => 'match_date', 'order' => 'ASC', 'limit' => -1, 'where' => '');
+        $defaults = array(
+            'orderby' => 'match_date',
+            'order' => 'ASC',
+            'limit' => -1,
+            'where' => '',
+            'search' => '',
+            'date_from' => '',
+            'date_to' => '',
+            'team_id' => 0,
+            'location_id' => 0,
+            'status' => '',
+        );
         $args = wp_parse_args($args, $defaults);
 
+        $conds = array();
+        $params = array();
+
+        if (!empty($args['where'])) {
+            $conds[] = '(' . $args['where'] . ')';
+        }
+        if (!empty($args['search'])) {
+            $like = '%' . $wpdb->esc_like($args['search']) . '%';
+            $conds[] = '(home_team LIKE %s OR away_team LIKE %s OR competition LIKE %s OR location LIKE %s OR notes LIKE %s)';
+            $params[] = $like; $params[] = $like; $params[] = $like; $params[] = $like; $params[] = $like;
+        }
+        if (!empty($args['date_from'])) {
+            $conds[] = 'match_date >= %s';
+            $params[] = $args['date_from'];
+        }
+        if (!empty($args['date_to'])) {
+            $conds[] = 'match_date <= %s';
+            $params[] = $args['date_to'];
+        }
+        if (!empty($args['team_id'])) {
+            $conds[] = '(home_team_id = %d OR away_team_id = %d)';
+            $params[] = intval($args['team_id']); $params[] = intval($args['team_id']);
+        }
+        if (!empty($args['location_id'])) {
+            $conds[] = 'location_id = %d';
+            $params[] = intval($args['location_id']);
+        }
+        if (!empty($args['status'])) {
+            $conds[] = 'status = %s';
+            $params[] = $args['status'];
+        }
+
         $sql = "SELECT * FROM $table";
-        if (!empty($args['where'])) $sql .= " WHERE " . $args['where'];
+        if ($conds) $sql .= ' WHERE ' . implode(' AND ', $conds);
+        if ($params) $sql = $wpdb->prepare($sql, $params);
         $sql .= " ORDER BY {$args['orderby']} {$args['order']}";
         if ($args['limit'] > 0) $sql .= " LIMIT " . intval($args['limit']);
 
@@ -133,7 +191,7 @@ class SMM_Database {
         $tm  = $wpdb->prefix . 'soccer_teams';
 
         return $wpdb->get_results($wpdb->prepare(
-            "SELECT a.*, p.player_name, p.team_id, t.team_name, t.team_logo_id
+            "SELECT a.*, p.player_name, p.team_id, p.availability, t.team_name, t.team_logo_id
              FROM $att a
              JOIN $pl p ON p.id = a.player_id
              LEFT JOIN $tm t ON t.id = p.team_id
@@ -141,18 +199,26 @@ class SMM_Database {
         ));
     }
 
+    /**
+     * Player IDs on a match that count for conflict detection.
+     * Excludes canceled/postponed matches' attendance is irrelevant here
+     * (caller filters matches by status first).
+     */
     public static function get_attending_player_ids($match_id) {
         global $wpdb;
+        $att = $wpdb->prefix . 'soccer_attendance';
+        $pl  = $wpdb->prefix . 'soccer_players';
+
         return $wpdb->get_col($wpdb->prepare(
-            "SELECT player_id FROM {$wpdb->prefix}soccer_attendance
-             WHERE match_id = %d AND attending = 1", $match_id
+            "SELECT a.player_id 
+             FROM $att a
+             JOIN $pl p ON p.id = a.player_id
+             WHERE a.match_id = %d 
+               AND a.attending = 1
+               AND p.availability IN ('available','maybe')", $match_id
         ));
     }
 
-    /**
-     * Save attendance. $player_ids is a flat array of manually-selected player IDs.
-     * Auto-added players (based on teams) are stored too, flagged auto_added=1.
-     */
     public static function set_attendance($match_id, $player_ids, $auto_player_ids = array()) {
         global $wpdb;
         $table = $wpdb->prefix . 'soccer_attendance';
@@ -162,7 +228,6 @@ class SMM_Database {
         $manual = array_map('intval', $player_ids);
         $auto   = array_map('intval', $auto_player_ids);
 
-        // Manual entries first (auto_added = 0)
         foreach (array_unique($manual) as $pid) {
             $wpdb->insert($table, array(
                 'match_id'   => intval($match_id),
@@ -171,8 +236,6 @@ class SMM_Database {
                 'auto_added' => 0,
             ));
         }
-
-        // Auto entries not already added manually
         foreach (array_unique($auto) as $pid) {
             if (in_array($pid, $manual, true)) continue;
             $wpdb->insert($table, array(

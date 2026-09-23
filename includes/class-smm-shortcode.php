@@ -16,11 +16,27 @@ class SMM_Shortcode {
         $atts = shortcode_atts(array(
             'limit' => -1,
             'show_conflicts' => 'yes',
-            'show_past' => 'no'
+            'show_past' => 'no',
+            'status' => '', // comma-separated list to include, e.g. "scheduled,confirmed"
         ), $atts);
 
-        $where = $atts['show_past'] === 'no' ? 'match_date >= CURDATE()' : '';
-        $matches = SMM_Database::get_matches(array('limit' => $atts['limit'], 'where' => $where));
+        $where_parts = array();
+        if ($atts['show_past'] === 'no') {
+            $where_parts[] = "match_date >= '" . esc_sql(SMM_Helpers::today_ymd()) . "'";
+        }
+        if (!empty($atts['status'])) {
+            $statuses = array_map('sanitize_key', explode(',', $atts['status']));
+            $statuses = array_intersect($statuses, array_keys(SMM_Helpers::statuses()));
+            if ($statuses) {
+                $where_parts[] = "status IN ('" . implode("','", array_map('esc_sql', $statuses)) . "')";
+            }
+        }
+
+        $matches = SMM_Database::get_matches(array(
+            'limit' => $atts['limit'],
+            'where' => implode(' AND ', $where_parts),
+        ));
+
         if (empty($matches)) return '<p>No upcoming matches scheduled.</p>';
 
         $checker = new SMM_Conflict_Checker();
@@ -31,6 +47,7 @@ class SMM_Shortcode {
             <table class="smm-matches-table">
                 <thead><tr>
                     <th>Date</th><th>Time</th><th>Home</th><th>Away</th>
+                    <th>Competition</th>
                     <th>Location</th><th>Players</th>
                     <?php if ($atts['show_conflicts'] === 'yes'): ?><th>Status</th><?php endif; ?>
                 </tr></thead>
@@ -44,11 +61,12 @@ class SMM_Shortcode {
                     $home_name = $home_team ? $home_team->team_name : $m->home_team;
                     $away_name = $away_team ? $away_team->team_name : $m->away_team;
                     $loc = $m->location_id ? SMM_Locations::get($m->location_id) : null;
+                    $is_canceled = in_array($m->status, array('canceled'), true);
                     ?>
-                    <tr class="<?php echo !empty($conflicts) ? 'smm-conflict-row' : ''; ?>">
-                        <td><?php echo date('M j, Y', strtotime($m->match_date)); ?></td>
+                    <tr class="<?php echo $is_canceled ? 'smm-canceled-row' : (!empty($conflicts) ? 'smm-conflict-row' : ''); ?>">
+                        <td><?php echo esc_html(SMM_Helpers::fmt_date($m->match_date)); ?></td>
                         <td>
-                            <?php echo date('g:i A', strtotime($m->match_time)); ?>
+                            <?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?>
                             <?php if ($m->match_duration): ?>
                                 <small>(<?php echo intval($m->match_duration); ?>min)</small>
                             <?php endif; ?>
@@ -61,6 +79,12 @@ class SMM_Shortcode {
                             <?php echo $away_team ? SMM_Teams::get_logo_html($away_team, 'thumbnail') : ''; ?>
                             <span><?php echo esc_html($away_name); ?></span>
                         </td>
+                        <td>
+                            <?php echo esc_html($m->competition); ?>
+                            <?php if ($m->round): ?>
+                                <small><?php echo esc_html($m->round); ?></small>
+                            <?php endif; ?>
+                        </td>
                         <td><?php echo esc_html($loc ? $loc->location_name : $m->location); ?></td>
                         <td class="smm-players">
                             <?php if (empty($attendance)): ?>—
@@ -70,17 +94,20 @@ class SMM_Shortcode {
                                     $logo = wp_get_attachment_image($a->team_logo_id, array(20,20), false,
                                         array('class'=>'smm-player-mini-logo'));
                                 }
+                                $avail = $a->availability ?? 'available';
                                 ?>
-                                <span class="smm-attendee"><?php echo $logo; ?><?php echo esc_html($a->player_name); ?></span>
+                                <span class="smm-attendee smm-avail-<?php echo esc_attr($avail); ?>"
+                                      title="<?php echo esc_attr(SMM_Helpers::availabilities()[$avail] ?? $avail); ?>">
+                                    <?php echo $logo; ?><?php echo esc_html($a->player_name); ?>
+                                </span>
                             <?php endforeach; endif; ?>
                         </td>
                         <?php if ($atts['show_conflicts'] === 'yes'): ?>
                             <td>
+                                <?php echo SMM_Helpers::status_badge($m->status); ?>
                                 <?php if (!empty($conflicts)): ?>
                                     <span class="smm-conflict-badge"
                                           title="<?php echo esc_attr(implode("\n", $conflicts)); ?>">⚠️</span>
-                                <?php else: ?>
-                                    <span class="smm-ok-badge">✓</span>
                                 <?php endif; ?>
                             </td>
                         <?php endif; ?>
@@ -96,11 +123,9 @@ class SMM_Shortcode {
     public function display_conflicts($atts) {
         $checker = new SMM_Conflict_Checker();
         $all = $checker->get_all_conflicts();
-
         if (empty($all)) {
             return '<p class="smm-no-conflicts">✓ No conflicts detected in the schedule.</p>';
         }
-
         ob_start();
         ?>
         <div class="smm-conflicts-container">
@@ -113,8 +138,8 @@ class SMM_Shortcode {
                 ?>
                 <div class="smm-conflict-item">
                     <h4><?php echo esc_html($home . ' vs ' . $away); ?></h4>
-                    <p><strong>Date:</strong> <?php echo date('M j, Y', strtotime($m->match_date)); ?></p>
-                    <p><strong>Time:</strong> <?php echo date('g:i A', strtotime($m->match_time)); ?>
+                    <p><strong>Date:</strong> <?php echo esc_html(SMM_Helpers::fmt_date($m->match_date)); ?></p>
+                    <p><strong>Time:</strong> <?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?>
                         <?php if ($m->match_duration) echo '(' . intval($m->match_duration) . ' min)'; ?></p>
                     <p><strong>Location:</strong> <?php echo esc_html($loc); ?></p>
                     <ul>
@@ -132,7 +157,6 @@ class SMM_Shortcode {
     public function display_teams($atts) {
         $teams = SMM_Teams::get_all();
         if (empty($teams)) return '<p>No teams added yet.</p>';
-
         ob_start();
         ?>
         <div class="smm-teams-grid">

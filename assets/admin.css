@@ -16,6 +16,15 @@
   border-radius: 3px;
   font-size: 12px;
 }
+.smm-status-badge {
+  display: inline-block;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
 .smm-players-checkboxes {
   max-height: 480px;
   overflow-y: auto;
@@ -101,4 +110,55 @@
 .smm-attendee-auto {
   background: #eaf7ee;
   border: 1px dashed #88c79a;
+}
+
+.smm-filters {
+  margin: 12px 0;
+}
+.smm-filters-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.smm-filters-row input[type="search"] {
+  min-width: 260px;
+}
+
+.smm-bulk-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 0;
+  margin-bottom: 4px;
+}
+
+/* Availability colors */
+.smm-avail-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.smm-avail-available {
+  background: #d4edda;
+  color: #155724;
+}
+.smm-avail-maybe {
+  background: #fff3cd;
+  color: #856404;
+}
+.smm-avail-unavailable {
+  background: #f8d7da;
+  color: #721c24;
+}
+.smm-avail-injured {
+  background: #e2e3e5;
+  color: #41464b;
+}
+.smm-avail {
+  margin-left: 6px;
+  font-weight: normal;
 }

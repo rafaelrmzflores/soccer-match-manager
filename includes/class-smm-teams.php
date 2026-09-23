@@ -20,23 +20,27 @@ class SMM_Teams {
         return $t ? $t->team_name : '';
     }
 
-    public static function add($name, $logo_id = 0) {
+    public static function add($name, $logo_id = 0, $default_duration = null) {
         global $wpdb;
         $name = sanitize_text_field($name);
         if (empty($name)) return false;
         return $wpdb->insert($wpdb->prefix . 'soccer_teams', array(
-            'team_name'    => $name,
-            'team_logo_id' => intval($logo_id)
+            'team_name'        => $name,
+            'team_logo_id'     => intval($logo_id),
+            'default_duration' => ($default_duration !== null && $default_duration !== '')
+                                    ? intval($default_duration) : null,
         ));
     }
 
-    public static function update($id, $name, $logo_id) {
+    public static function update($id, $name, $logo_id, $default_duration = null) {
         global $wpdb;
         return $wpdb->update(
             $wpdb->prefix . 'soccer_teams',
             array(
-                'team_name'    => sanitize_text_field($name),
-                'team_logo_id' => intval($logo_id)
+                'team_name'        => sanitize_text_field($name),
+                'team_logo_id'     => intval($logo_id),
+                'default_duration' => ($default_duration !== null && $default_duration !== '')
+                                        ? intval($default_duration) : null,
             ),
             array('id' => intval($id))
         );
@@ -57,8 +61,7 @@ class SMM_Teams {
     public static function get_logo_html($team, $size = 'thumbnail', $class = 'smm-team-logo') {
         if (!$team || empty($team->team_logo_id)) return '';
         $img = wp_get_attachment_image($team->team_logo_id, $size, false, array(
-            'class' => $class,
-            'alt'   => esc_attr($team->team_name)
+            'class' => $class, 'alt' => esc_attr($team->team_name)
         ));
         return $img ?: '';
     }
