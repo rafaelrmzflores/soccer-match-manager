@@ -29,18 +29,6 @@ class SMM_Competitions {
         ));
     }
 
-    /**
-     * Return a display label including season if present.
-     * e.g. "Fall League (2025)"
-     */
-    public static function get_label($id) {
-        $c = self::get($id);
-        if (!$c) return '';
-        return $c->season
-            ? sprintf('%s (%s)', $c->competition_name, $c->season)
-            : $c->competition_name;
-    }
-
     public static function add($name, $short_label = '', $season = '', $age_group = '', $color = '#0d6efd', $notes = '') {
         global $wpdb;
         $name = sanitize_text_field($name);
@@ -75,13 +63,10 @@ class SMM_Competitions {
     public static function delete($id) {
         global $wpdb;
         $id = intval($id);
-
-        // Detach matches — keep the free-text name so nothing breaks
         $wpdb->query($wpdb->prepare(
             "UPDATE {$wpdb->prefix}soccer_matches SET competition_id = 0 WHERE competition_id = %d",
             $id
         ));
-
         return $wpdb->delete(
             $wpdb->prefix . 'soccer_competitions',
             array('id' => $id),
@@ -89,7 +74,6 @@ class SMM_Competitions {
         );
     }
 
-    /** Number of matches currently assigned to a competition. */
     public static function count_matches($id) {
         global $wpdb;
         return (int) $wpdb->get_var($wpdb->prepare(
@@ -105,7 +89,6 @@ class SMM_Competitions {
         return '#0d6efd';
     }
 
-    /** Small colored badge for a competition (used in lists). */
     public static function badge_html($id) {
         $c = self::get($id);
         if (!$c) return '';

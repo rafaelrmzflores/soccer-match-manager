@@ -62,7 +62,7 @@ jQuery(function ($) {
   $(document).on("change", ".smm-team-select", refreshAutoPlayers);
   if ($("#smm-match-form").length) refreshAutoPlayers();
 
-  /* ---- Check all checkbox ---- */
+  /* ---- Check-all checkbox ---- */
   $(document).on("change", "#smm-check-all", function () {
     $('input[name="match_ids[]"]').prop("checked", $(this).is(":checked"));
   });

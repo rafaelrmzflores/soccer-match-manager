@@ -24,7 +24,6 @@ class SMM_Locations {
         global $wpdb;
         $name = sanitize_text_field($name);
         if (empty($name)) return false;
-
         return $wpdb->insert($wpdb->prefix . 'soccer_locations', array(
             'location_name'          => $name,
             'location_address'       => sanitize_text_field($address),
@@ -52,23 +51,15 @@ class SMM_Locations {
     public static function delete($id) {
         global $wpdb;
         $id = intval($id);
-
-        // Detach matches — keep legacy location text so nothing breaks
         $wpdb->query($wpdb->prepare(
             "UPDATE {$wpdb->prefix}soccer_matches SET location_id = 0 WHERE location_id = %d", $id
         ));
-
         return $wpdb->delete($wpdb->prefix . 'soccer_locations', array('id' => $id), array('%d'));
     }
 
-    /**
-     * Haversine distance in kilometers between two coordinate pairs.
-     */
     public static function distance_km($lat1, $lng1, $lat2, $lng2) {
-        if ($lat1 === null || $lng1 === null || $lat2 === null || $lng2 === null) {
-            return null;
-        }
-        $R = 6371; // km
+        if ($lat1 === null || $lng1 === null || $lat2 === null || $lng2 === null) return null;
+        $R = 6371;
         $dLat = deg2rad($lat2 - $lat1);
         $dLng = deg2rad($lng2 - $lng1);
         $a = sin($dLat / 2) ** 2

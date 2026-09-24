@@ -20,7 +20,7 @@ class SMM_Admin {
             'manage_options', 'smm-add-match', array($this, 'add_match_page'));
 
         add_submenu_page('smm-matches', 'Competitions', 'Competitions',
-        'manage_options', 'smm-competitions', array($this, 'competitions_page'));
+            'manage_options', 'smm-competitions', array($this, 'competitions_page'));
 
         add_submenu_page('smm-matches', 'Teams', 'Teams',
             'manage_options', 'smm-teams', array($this, 'teams_page'));
@@ -33,6 +33,9 @@ class SMM_Admin {
 
         add_submenu_page('smm-matches', 'Import / Export', 'Import / Export',
             'manage_options', 'smm-import-export', array($this, 'import_export_page'));
+
+        add_submenu_page('smm-matches', 'Settings', 'Settings',
+            'manage_options', 'smm-settings', array($this, 'settings_page'));
     }
 
     public function assets($hook) {
@@ -61,12 +64,8 @@ class SMM_Admin {
         wp_send_json_success(array('players' => $out));
     }
 
-    /**
-     * Admin-wide banner: shows on every admin page if upcoming matches have conflicts.
-     */
     public function conflict_banner() {
         if (!current_user_can('manage_options')) return;
-        // Don't spam on our own conflict-heavy pages
         $screen = get_current_screen();
         if ($screen && $screen->id === 'toplevel_page_smm-matches' && isset($_GET['filter_conflicts'])) {
             return;
@@ -89,6 +88,27 @@ class SMM_Admin {
         /* ---- SAVE MATCH ---- */
         if (isset($_POST['smm_save_match']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_save_match')) {
             $this->save_match_from_post();
+        }
+
+        /* ---- DELETE MATCH ---- */
+        if (isset($_GET['action'], $_GET['id']) && $_GET['action'] === 'delete_match') {
+            if (wp_verify_nonce($_GET['_wpnonce'], 'smm_del_match_' . $_GET['id'])) {
+                SMM_Database::delete_match(intval($_GET['id']));
+                wp_redirect(admin_url('admin.php?page=smm-matches&message=deleted'));
+                exit;
+            }
+        }
+
+        /* ---- BULK STATUS CHANGE ---- */
+        if (isset($_POST['smm_bulk_status'], $_POST['match_ids']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_bulk_status')) {
+            $status = sanitize_key($_POST['smm_bulk_status']);
+            if (array_key_exists($status, SMM_Helpers::statuses())) {
+                foreach ((array) $_POST['match_ids'] as $id) {
+                    SMM_Database::update_match(intval($id), array('status' => $status));
+                }
+            }
+            wp_redirect(add_query_arg('message', 'bulk_updated', wp_get_referer()));
+            exit;
         }
 
         /* ---- COMPETITIONS ---- */
@@ -123,27 +143,6 @@ class SMM_Admin {
                 wp_redirect(admin_url('admin.php?page=smm-competitions&message=competition_deleted'));
                 exit;
             }
-        }
-
-        /* ---- DELETE MATCH ---- */
-        if (isset($_GET['action'], $_GET['id']) && $_GET['action'] === 'delete_match') {
-            if (wp_verify_nonce($_GET['_wpnonce'], 'smm_del_match_' . $_GET['id'])) {
-                SMM_Database::delete_match(intval($_GET['id']));
-                wp_redirect(admin_url('admin.php?page=smm-matches&message=deleted'));
-                exit;
-            }
-        }
-
-        /* ---- BULK STATUS CHANGE ---- */
-        if (isset($_POST['smm_bulk_status'], $_POST['match_ids']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_bulk_status')) {
-            $status = sanitize_key($_POST['smm_bulk_status']);
-            if (array_key_exists($status, SMM_Helpers::statuses())) {
-                foreach ((array) $_POST['match_ids'] as $id) {
-                    SMM_Database::update_match(intval($id), array('status' => $status));
-                }
-            }
-            wp_redirect(add_query_arg('message', 'bulk_updated', wp_get_referer()));
-            exit;
         }
 
         /* ---- TEAMS ---- */
@@ -220,7 +219,7 @@ class SMM_Admin {
             }
         }
 
-                /* ---- CSV IMPORT (all entity types) ---- */
+        /* ---- CSV IMPORT (all entity types) ---- */
         if (!empty($_POST['smm_import_entity']) && !empty($_FILES['csv_file']['tmp_name'])) {
             $entity = sanitize_key($_POST['smm_import_entity']);
             $allowed = array('locations','competitions','teams','players','matches');
@@ -246,10 +245,7 @@ class SMM_Admin {
                         break;
                     case 'matches':
                     default:
-                        // Existing match importer doesn't support update_existing,
-                        // but is already find-or-create. Keep behavior identical.
                         $res = SMM_CSV::import_matches($file);
-                        $res['updated'] = 0;
                         break;
                 }
                 set_transient('smm_import_result_' . get_current_user_id(), $res, 60);
@@ -280,6 +276,13 @@ class SMM_Admin {
                 }
                 exit;
             }
+        }
+
+        /* ---- SETTINGS ---- */
+        if (isset($_POST['smm_save_settings']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_settings')) {
+            update_option('smm_travel_speed_kmh', intval($_POST['smm_travel_speed_kmh'] ?? 50));
+            wp_redirect(admin_url('admin.php?page=smm-settings&message=saved'));
+            exit;
         }
     }
 
@@ -313,20 +316,16 @@ class SMM_Admin {
             'notes'          => sanitize_textarea_field($_POST['notes'] ?? ''),
         );
 
-        // Recurrence
         $repeat = !empty($_POST['repeat_weeks']) ? max(1, intval($_POST['repeat_weeks'])) : 1;
-
         $match_id = !empty($_POST['match_id']) ? intval($_POST['match_id']) : 0;
 
         if ($match_id) {
-            // Editing a single match — do not apply recurrence
             SMM_Database::update_match($match_id, $data);
             $this->save_attendance_from_post($match_id, $home_id, $away_id);
             wp_redirect(admin_url('admin.php?page=smm-matches&message=updated'));
             exit;
         }
 
-        // Inserting (possibly recurring)
         $created = 0;
         for ($i = 0; $i < $repeat; $i++) {
             $row = $data;
@@ -369,10 +368,6 @@ class SMM_Admin {
         return array_unique($ids);
     }
 
-        /**
-     * Columns the match list can be sorted by, with their display labels.
-     * Maps URL key => array('sql' => column, 'label' => text)
-     */
     private function sortable_match_columns() {
         return array(
             'match_date'     => array('sql' => 'match_date',     'label' => 'Date'),
@@ -387,9 +382,6 @@ class SMM_Admin {
         );
     }
 
-    /**
-     * Render a sortable column header link.
-     */
     private function sort_link($key, $label, $current_by, $current_order) {
         $cols = $this->sortable_match_columns();
         if (!isset($cols[$key])) {
@@ -400,13 +392,11 @@ class SMM_Admin {
         $is_current = ($current_by === $sql_col)
             || (strpos(',' . $current_by . ',', ',' . $sql_col . ',') !== false);
 
-        // Toggle direction only for the active column
         $next_order = 'ASC';
         if ($is_current) {
             $next_order = (strtoupper($current_order) === 'ASC') ? 'DESC' : 'ASC';
         }
 
-        // Preserve filters
         $args = $_GET;
         $args['orderby'] = $sql_col;
         $args['order']   = $next_order;
@@ -414,7 +404,6 @@ class SMM_Admin {
 
         $url = add_query_arg($args, admin_url('admin.php'));
 
-        // Arrow indicator
         $arrow = '';
         if ($is_current) {
             $arrow = (strtoupper($current_order) === 'ASC') ? ' ▲' : ' ▼';
@@ -429,8 +418,6 @@ class SMM_Admin {
         );
     }
 
-    /* =================== MATCHES LIST =================== */
-
     public function matches_page() {
         $f_search      = sanitize_text_field($_GET['s'] ?? '');
         $f_date_from   = sanitize_text_field($_GET['date_from'] ?? '');
@@ -442,7 +429,7 @@ class SMM_Admin {
         $f_conflicts   = !empty($_GET['filter_conflicts']);
         $show_past     = !empty($_GET['show_past']);
 
-        // --- Sort state ---
+        // Sort state
         $sortable = $this->sortable_match_columns();
         $allowed_sql_cols = array_map(function($c) { return $c['sql']; }, $sortable);
 
@@ -451,8 +438,6 @@ class SMM_Admin {
             $orderby = 'match_date';
         }
         $order = (strtoupper($_GET['order'] ?? '') === 'DESC') ? 'DESC' : 'ASC';
-
-        // Default direction: upcoming ASC, past DESC when the user hasn't chosen
         if (!isset($_GET['order'])) {
             $order = $show_past ? 'DESC' : 'ASC';
         }
@@ -518,6 +503,8 @@ class SMM_Admin {
 
             <form method="get" class="smm-filters">
                 <input type="hidden" name="page" value="smm-matches">
+                <input type="hidden" name="orderby" value="<?php echo esc_attr($orderby); ?>">
+                <input type="hidden" name="order" value="<?php echo esc_attr($order); ?>">
                 <div class="smm-filters-row">
                     <input type="search" name="s" value="<?php echo esc_attr($f_search); ?>"
                            placeholder="Search team, competition, notes…">
@@ -560,8 +547,7 @@ class SMM_Admin {
                         Only conflicts
                     </label>
                     <label>
-                        <input type="checkbox" name="show_past" value="1"
-                               <?php checked(!empty($_GET['show_past'])); ?>>
+                        <input type="checkbox" name="show_past" value="1" <?php checked($show_past); ?>>
                         Show past
                     </label>
                     <button class="button">Filter</button>
@@ -582,33 +568,23 @@ class SMM_Admin {
                 </div>
 
                 <table class="wp-list-table widefat fixed striped">
-
-
-                    <!-- <thead><tr>
-                        <th style="width:28px;"><input type="checkbox" id="smm-check-all"></th>
-                        <th>Date</th>
-                        <th>Time</th>
-                        <th>Competition</th><th>Home</th><th>Away</th>
-                        <th>Round</th><th>Location</th><th>Status</th><th>Conflicts</th><th>Actions</th>
-                    </tr></thead> -->
-
                     <thead><tr>
                         <th style="width:28px;"><input type="checkbox" id="smm-check-all"></th>
                         <th><?php echo $this->sort_link('match_date', 'Date', $orderby, $order); ?></th>
                         <th><?php echo $this->sort_link('match_time', 'Time', $orderby, $order); ?></th>
+                        <th><?php echo $this->sort_link('match_duration', 'Duration', $orderby, $order); ?></th>
                         <th><?php echo $this->sort_link('competition', 'Competition', $orderby, $order); ?></th>
                         <th><?php echo $this->sort_link('home_team', 'Home', $orderby, $order); ?></th>
                         <th><?php echo $this->sort_link('away_team', 'Away', $orderby, $order); ?></th>
                         <th><?php echo $this->sort_link('round', 'Round', $orderby, $order); ?></th>
                         <th><?php echo $this->sort_link('location', 'Location', $orderby, $order); ?></th>
-                        <th><?php echo $this->sort_link('status', 'Status', $orderby, $order); ?></th>          
+                        <th><?php echo $this->sort_link('status', 'Status', $orderby, $order); ?></th>
                         <th>Conflicts</th>
                         <th>Actions</th>
                     </tr></thead>
-
                     <tbody>
                     <?php if (empty($matches)): ?>
-                        <tr><td colspan="11">No matches match your filters.</td></tr>
+                        <tr><td colspan="12">No matches match your filters.</td></tr>
                     <?php else: foreach ($matches as $m):
                         $conflicts = $checker->check_match_conflicts($m->id);
                         $home_team = $m->home_team_id ? SMM_Teams::get($m->home_team_id) : null;
@@ -621,6 +597,7 @@ class SMM_Admin {
                             <td><input type="checkbox" name="match_ids[]" value="<?php echo $m->id; ?>"></td>
                             <td><?php echo esc_html(SMM_Helpers::fmt_date($m->match_date)); ?></td>
                             <td><?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?></td>
+                            <td><?php echo $m->match_duration ? intval($m->match_duration) . ' min' : '—'; ?></td>
                             <td>
                                 <?php if ($m->competition_id): ?>
                                     <?php echo SMM_Competitions::badge_html($m->competition_id); ?>
@@ -663,9 +640,7 @@ class SMM_Admin {
         <?php
     }
 
-    /* =================== ADD/EDIT MATCH =================== */
-
-        public function add_match_page() {
+    public function add_match_page() {
         $match = null;
         $selected = array();
         if (isset($_GET['id'])) {
@@ -871,8 +846,6 @@ class SMM_Admin {
         <?php
     }
 
-        /* =================== COMPETITIONS PAGE =================== */
-
     public function competitions_page() {
         $competitions = SMM_Competitions::get_all();
         $edit_comp = isset($_GET['edit']) ? SMM_Competitions::get(intval($_GET['edit'])) : null;
@@ -892,8 +865,6 @@ class SMM_Admin {
             <?php endif; ?>
 
             <div class="smm-players-layout">
-
-                <!-- Add / Edit form -->
                 <div class="smm-player-form-wrap">
                     <h2><?php echo $edit_comp ? 'Edit Competition' : 'Add Competition'; ?></h2>
                     <form method="post">
@@ -954,7 +925,6 @@ class SMM_Admin {
                     </form>
                 </div>
 
-                <!-- List -->
                 <div class="smm-players-list-wrap">
                     <h2>All Competitions</h2>
                     <table class="wp-list-table widefat fixed striped">
@@ -977,20 +947,17 @@ class SMM_Admin {
                                 <td>
                                     <a href="<?php echo admin_url('admin.php?page=smm-competitions&edit=' . $c->id); ?>">Edit</a> |
                                     <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=smm-competitions&action=delete_competition&id=' . $c->id), 'smm_del_competition_' . $c->id); ?>"
-                                       onclick="return confirm('Delete this competition? Matches will keep their competition text but lose the link.');">Delete</a>
+                                       onclick="return confirm('Delete this competition?');">Delete</a>
                                 </td>
                             </tr>
                         <?php endforeach; endif; ?>
                         </tbody>
                     </table>
                 </div>
-
             </div>
         </div>
         <?php
     }
-
-    /* =================== TEAMS =================== */
 
     public function teams_page() {
         $teams = SMM_Teams::get_all();
@@ -1090,8 +1057,6 @@ class SMM_Admin {
         </div>
         <?php
     }
-
-    /* =================== PLAYERS =================== */
 
     public function players_page() {
         $players = SMM_Players::get_all();
@@ -1228,8 +1193,6 @@ class SMM_Admin {
         <?php
     }
 
-    /* =================== LOCATIONS =================== */
-
     public function locations_page() {
         $locations = SMM_Locations::get_all();
         $edit_location = isset($_GET['edit']) ? SMM_Locations::get(intval($_GET['edit'])) : null;
@@ -1333,13 +1296,9 @@ class SMM_Admin {
         <?php
     }
 
-    /* =================== IMPORT / EXPORT =================== */
-
     public function import_export_page() {
         $result = get_transient('smm_import_result_' . get_current_user_id());
         if ($result) delete_transient('smm_import_result_' . get_current_user_id());
-
-        $nonce = wp_create_nonce('smm_export');
         ?>
         <div class="wrap">
             <h1>Import / Export</h1>
@@ -1372,7 +1331,6 @@ class SMM_Admin {
                 Each file matches by name, so running an import twice is safe.
             </p>
 
-            <!-- ============ EXPORT ============ -->
             <h2>Export</h2>
             <table class="widefat striped" style="max-width:800px;">
                 <thead><tr><th>Entity</th><th>What's included</th><th>Download</th></tr></thead>
@@ -1400,7 +1358,6 @@ class SMM_Admin {
                 </tbody>
             </table>
 
-            <!-- ============ IMPORT ============ -->
             <h2>Import</h2>
             <p>CSV files must have a header row. Team/location/competition names are matched case-sensitively.</p>
 
@@ -1436,7 +1393,6 @@ class SMM_Admin {
                 </tbody>
             </table>
 
-            <!-- ============ TEMPLATES ============ -->
             <h2>Templates</h2>
             <p>Click to download a starter CSV with one example row:</p>
             <p>
@@ -1461,4 +1417,32 @@ class SMM_Admin {
         <?php
     }
 
+    public function settings_page() {
+        if (isset($_GET['message']) && $_GET['message'] === 'saved') {
+            echo '<div class="notice notice-success is-dismissible"><p>Settings saved.</p></div>';
+        }
+        $speed = SMM_Helpers::travel_speed_kmh();
+        ?>
+        <div class="wrap">
+            <h1>Settings</h1>
+            <form method="post">
+                <?php wp_nonce_field('smm_settings', 'smm_nonce'); ?>
+                <table class="form-table">
+                    <tr>
+                        <th><label for="smm_travel_speed_kmh">Avg travel speed (km/h)</label></th>
+                        <td>
+                            <input type="number" name="smm_travel_speed_kmh" id="smm_travel_speed_kmh"
+                                   min="5" max="120" value="<?php echo intval($speed); ?>">
+                            <p class="description">
+                                Used to estimate driving time between locations for conflict detection.
+                                Realistic range: 40 (city) to 70 (highway/suburban).
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button('Save', 'primary', 'smm_save_settings'); ?>
+            </form>
+        </div>
+        <?php
+    }
 }

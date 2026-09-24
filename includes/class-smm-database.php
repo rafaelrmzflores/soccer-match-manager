@@ -104,18 +104,12 @@ class SMM_Database {
         dbDelta($sql_matches);
         dbDelta($sql_attendance);
 
-        // Backfill defaults for older rows
         $wpdb->query("UPDATE $matches SET status = 'scheduled' WHERE status IS NULL OR status = ''");
         $wpdb->query("UPDATE $players SET availability = 'available' WHERE availability IS NULL OR availability = ''");
 
-        // Migrate legacy free-text competition names into the competitions table
         self::migrate_legacy_competitions();
     }
 
-    /**
-     * One-time: for any existing match with a non-empty `competition` string
-     * but no `competition_id`, create/find the competition and link it.
-     */
     private static function migrate_legacy_competitions() {
         global $wpdb;
         $matches = $wpdb->prefix . 'soccer_matches';
@@ -154,9 +148,7 @@ class SMM_Database {
         }
     }
 
-    /* ---------- Matches ---------- */
-
-        public static function get_matches($args = array()) {
+    public static function get_matches($args = array()) {
         global $wpdb;
         $table = $wpdb->prefix . 'soccer_matches';
 
@@ -212,7 +204,7 @@ class SMM_Database {
             $params[] = intval($args['competition_id']);
         }
 
-                // --- Safe multi-column ORDER BY ---
+        // --- Safe multi-column ORDER BY ---
         $allowed_cols = array(
             'id', 'match_date', 'match_time', 'match_duration',
             'home_team', 'away_team', 'location', 'status',
@@ -230,18 +222,15 @@ class SMM_Database {
             $requested = array('match_date', 'match_time');
         }
 
-        // Always keep chronological as secondary sort (unless we're already
-        // sorting by date/time explicitly)
+        // Always keep chronological as a secondary sort unless sorting by id
         if (!in_array('match_date', $requested, true) && $requested !== array('id')) {
             $requested[] = 'match_date';
         }
-        if (!in_array('match_time', $requested, true)
-            && in_array('match_date', $requested, true)
+        if (in_array('match_date', $requested, true)
             && !in_array('match_time', $requested, true)) {
             $requested[] = 'match_time';
         }
 
-        // De-duplicate while preserving order
         $requested = array_values(array_unique($requested));
 
         $orderby_parts = array();
@@ -281,8 +270,6 @@ class SMM_Database {
         $wpdb->delete($wpdb->prefix . 'soccer_attendance', array('match_id' => $id), array('%d'));
         return $wpdb->delete($wpdb->prefix . 'soccer_matches', array('id' => $id), array('%d'));
     }
-
-    /* ---------- Attendance ---------- */
 
     public static function get_attendance($match_id) {
         global $wpdb;

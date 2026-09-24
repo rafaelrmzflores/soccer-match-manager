@@ -49,8 +49,6 @@ class SMM_CSV_Entities {
                 );
             }, $rows)
         );
-        // Note: logo is not exported because it's an attachment ID,
-        // which is site-specific. Re-upload logos after import.
     }
 
     public static function export_players() {
@@ -192,7 +190,6 @@ class SMM_CSV_Entities {
                     if ($t) {
                         $team_id = intval($t->id);
                     } else {
-                        // Auto-create missing team so imports don't silently drop data
                         SMM_Teams::add($team_name);
                         $team_id = intval($wpdb->insert_id);
                     }
@@ -235,10 +232,6 @@ class SMM_CSV_Entities {
         ));
     }
 
-    /**
-     * Generic importer shared by all four entity types.
-     * $opts = ['required' => [...], 'handler' => callable($row, $update_existing): 'added'|'updated'|'skip']
-     */
     private static function import_generic($file_path, $opts) {
         $result = array(
             'added'   => 0,
@@ -304,8 +297,6 @@ class SMM_CSV_Entities {
         fclose($handle);
         return $result;
     }
-
-    /* ---------- Lookups ---------- */
 
     private static function find_location($name) {
         global $wpdb;

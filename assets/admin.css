@@ -162,17 +162,8 @@
   margin-left: 6px;
   font-weight: normal;
 }
-/* Competition badge */
-.smm-comp-badge {
-  display: inline-block;
-  color: #fff;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
+
+/* Sortable header links */
 .smm-sort-link {
   color: inherit;
   text-decoration: none;
@@ -185,4 +176,16 @@
 }
 .smm-sort-link.smm-sort-active {
   font-weight: 600;
+}
+
+/* Competition badge */
+.smm-comp-badge {
+  display: inline-block;
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }

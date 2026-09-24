@@ -2,7 +2,7 @@
 class SMM_CSV {
 
     public static function import_matches($file_path) {
-        $result = array('added' => 0, 'skipped' => 0, 'errors' => array());
+        $result = array('added' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => array());
 
         if (!file_exists($file_path)) {
             $result['errors'][] = 'File not found.';
@@ -38,6 +38,9 @@ class SMM_CSV {
         $row_num = 1;
         while (($row = fgetcsv($handle)) !== false) {
             $row_num++;
+            if (count($row) < count($header)) {
+                $row = array_pad($row, count($header), '');
+            }
             $data = array_combine(
                 array_slice($header, 0, count($row)),
                 array_slice($row, 0, count($header))
@@ -70,7 +73,6 @@ class SMM_CSV {
                 $status = 'scheduled';
             }
 
-            // Competition: find or create by name
             $comp_name = trim($data['competition'] ?? '');
             $comp_id = 0;
             if ($comp_name) {
