@@ -5,11 +5,25 @@ class SMM_Database {
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
 
-        $matches    = $wpdb->prefix . 'soccer_matches';
-        $players    = $wpdb->prefix . 'soccer_players';
-        $teams      = $wpdb->prefix . 'soccer_teams';
-        $locations  = $wpdb->prefix . 'soccer_locations';
-        $attendance = $wpdb->prefix . 'soccer_attendance';
+        $matches      = $wpdb->prefix . 'soccer_matches';
+        $players      = $wpdb->prefix . 'soccer_players';
+        $teams        = $wpdb->prefix . 'soccer_teams';
+        $locations    = $wpdb->prefix . 'soccer_locations';
+        $attendance   = $wpdb->prefix . 'soccer_attendance';
+        $competitions = $wpdb->prefix . 'soccer_competitions';
+
+        $sql_competitions = "CREATE TABLE $competitions (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            competition_name varchar(150) NOT NULL,
+            short_label varchar(50) DEFAULT '',
+            season varchar(50) DEFAULT '',
+            age_group varchar(50) DEFAULT '',
+            color varchar(7) DEFAULT '#0d6efd',
+            notes text,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY competition_name (competition_name)
+        ) $charset_collate;";
 
         $sql_teams = "CREATE TABLE $teams (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -58,6 +72,7 @@ class SMM_Database {
             location_id mediumint(9) DEFAULT 0,
             location varchar(255) NOT NULL,
             status varchar(20) DEFAULT 'scheduled',
+            competition_id mediumint(9) DEFAULT 0,
             competition varchar(150) DEFAULT '',
             round varchar(50) DEFAULT '',
             notes text,
@@ -65,7 +80,8 @@ class SMM_Database {
             PRIMARY KEY (id),
             KEY match_date (match_date),
             KEY location_id (location_id),
-            KEY status (status)
+            KEY status (status),
+            KEY competition_id (competition_id)
         ) $charset_collate;";
 
         $sql_attendance = "CREATE TABLE $attendance (
@@ -81,31 +97,72 @@ class SMM_Database {
         ) $charset_collate;";
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql_competitions);
         dbDelta($sql_teams);
         dbDelta($sql_players);
         dbDelta($sql_locations);
         dbDelta($sql_matches);
         dbDelta($sql_attendance);
 
-        // Backfill defaults for older rows (safe on fresh install too)
+        // Backfill defaults for older rows
         $wpdb->query("UPDATE $matches SET status = 'scheduled' WHERE status IS NULL OR status = ''");
         $wpdb->query("UPDATE $players SET availability = 'available' WHERE availability IS NULL OR availability = ''");
+
+        // Migrate legacy free-text competition names into the competitions table
+        self::migrate_legacy_competitions();
+    }
+
+    /**
+     * One-time: for any existing match with a non-empty `competition` string
+     * but no `competition_id`, create/find the competition and link it.
+     */
+    private static function migrate_legacy_competitions() {
+        global $wpdb;
+        $matches = $wpdb->prefix . 'soccer_matches';
+        $comps   = $wpdb->prefix . 'soccer_competitions';
+
+        $rows = $wpdb->get_results(
+            "SELECT DISTINCT competition FROM $matches 
+             WHERE competition IS NOT NULL 
+               AND competition != '' 
+               AND (competition_id IS NULL OR competition_id = 0)"
+        );
+        if (!$rows) return;
+
+        foreach ($rows as $r) {
+            $name = trim($r->competition);
+            if (!$name) continue;
+
+            $id = $wpdb->get_var($wpdb->prepare(
+                "SELECT id FROM $comps WHERE competition_name = %s", $name
+            ));
+            if (!$id) {
+                $wpdb->insert($comps, array(
+                    'competition_name' => sanitize_text_field($name),
+                ));
+                $id = $wpdb->insert_id;
+            }
+            if ($id) {
+                $wpdb->update(
+                    $matches,
+                    array('competition_id' => intval($id)),
+                    array('competition' => $name),
+                    array('%d'),
+                    array('%s')
+                );
+            }
+        }
     }
 
     /* ---------- Matches ---------- */
 
-    /**
-     * $args:
-     *  orderby, order, limit, where (raw, trusted), search, date_from, date_to,
-     *  team_id, location_id, status, only_conflicts (handled by caller)
-     */
-    public static function get_matches($args = array()) {
+        public static function get_matches($args = array()) {
         global $wpdb;
         $table = $wpdb->prefix . 'soccer_matches';
 
         $defaults = array(
-            'orderby' => 'match_date',
-            'order' => 'ASC',
+            'orderby' => 'match_date, match_time',
+            'order'   => 'ASC',
             'limit' => -1,
             'where' => '',
             'search' => '',
@@ -114,6 +171,7 @@ class SMM_Database {
             'team_id' => 0,
             'location_id' => 0,
             'status' => '',
+            'competition_id' => 0,
         );
         $args = wp_parse_args($args, $defaults);
 
@@ -125,8 +183,9 @@ class SMM_Database {
         }
         if (!empty($args['search'])) {
             $like = '%' . $wpdb->esc_like($args['search']) . '%';
-            $conds[] = '(home_team LIKE %s OR away_team LIKE %s OR competition LIKE %s OR location LIKE %s OR notes LIKE %s)';
-            $params[] = $like; $params[] = $like; $params[] = $like; $params[] = $like; $params[] = $like;
+            $conds[] = '(home_team LIKE %s OR away_team LIKE %s OR competition LIKE %s OR location LIKE %s OR notes LIKE %s OR round LIKE %s)';
+            $params[] = $like; $params[] = $like; $params[] = $like;
+            $params[] = $like; $params[] = $like; $params[] = $like;
         }
         if (!empty($args['date_from'])) {
             $conds[] = 'match_date >= %s';
@@ -148,11 +207,52 @@ class SMM_Database {
             $conds[] = 'status = %s';
             $params[] = $args['status'];
         }
+        if (!empty($args['competition_id'])) {
+            $conds[] = 'competition_id = %d';
+            $params[] = intval($args['competition_id']);
+        }
+
+                // --- Safe multi-column ORDER BY ---
+        $allowed_cols = array(
+            'id', 'match_date', 'match_time', 'match_duration',
+            'home_team', 'away_team', 'location', 'status',
+            'competition', 'round', 'created_at',
+        );
+        $order = (strtoupper($args['order']) === 'DESC') ? 'DESC' : 'ASC';
+
+        $requested = array();
+        foreach (array_map('trim', explode(',', $args['orderby'])) as $col) {
+            if (in_array($col, $allowed_cols, true)) {
+                $requested[] = $col;
+            }
+        }
+        if (empty($requested)) {
+            $requested = array('match_date', 'match_time');
+        }
+
+        // Always keep chronological as secondary sort (unless we're already
+        // sorting by date/time explicitly)
+        if (!in_array('match_date', $requested, true) && $requested !== array('id')) {
+            $requested[] = 'match_date';
+        }
+        if (!in_array('match_time', $requested, true)
+            && in_array('match_date', $requested, true)
+            && !in_array('match_time', $requested, true)) {
+            $requested[] = 'match_time';
+        }
+
+        // De-duplicate while preserving order
+        $requested = array_values(array_unique($requested));
+
+        $orderby_parts = array();
+        foreach ($requested as $col) {
+            $orderby_parts[] = $col . ' ' . $order;
+        }
 
         $sql = "SELECT * FROM $table";
         if ($conds) $sql .= ' WHERE ' . implode(' AND ', $conds);
         if ($params) $sql = $wpdb->prepare($sql, $params);
-        $sql .= " ORDER BY {$args['orderby']} {$args['order']}";
+        $sql .= ' ORDER BY ' . implode(', ', $orderby_parts);
         if ($args['limit'] > 0) $sql .= " LIMIT " . intval($args['limit']);
 
         return $wpdb->get_results($sql);
@@ -199,11 +299,6 @@ class SMM_Database {
         ));
     }
 
-    /**
-     * Player IDs on a match that count for conflict detection.
-     * Excludes canceled/postponed matches' attendance is irrelevant here
-     * (caller filters matches by status first).
-     */
     public static function get_attending_player_ids($match_id) {
         global $wpdb;
         $att = $wpdb->prefix . 'soccer_attendance';

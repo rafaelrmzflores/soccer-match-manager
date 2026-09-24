@@ -1,14 +1,6 @@
 <?php
 class SMM_CSV {
 
-    /**
-     * Import matches from an uploaded CSV.
-     * Columns: date, time, home_team, away_team, location, duration, status,
-     *          competition, round, notes
-     * Team and Location are matched by name; created if not found.
-     *
-     * Returns array('added' => n, 'skipped' => n, 'errors' => [...])
-     */
     public static function import_matches($file_path) {
         $result = array('added' => 0, 'skipped' => 0, 'errors' => array());
 
@@ -23,7 +15,6 @@ class SMM_CSV {
             return $result;
         }
 
-        // Read header
         $header = fgetcsv($handle);
         if (!$header) {
             fclose($handle);
@@ -31,7 +22,6 @@ class SMM_CSV {
             return $result;
         }
 
-        // Normalize header names
         $header = array_map(function($h) {
             return strtolower(trim(str_replace(' ', '_', $h)));
         }, $header);
@@ -65,7 +55,6 @@ class SMM_CSV {
                 continue;
             }
 
-            // Find or create home team
             $home_id = self::find_or_create_team($home);
             $away_id = self::find_or_create_team($away);
             $loc_id  = self::find_or_create_location($loc);
@@ -81,6 +70,13 @@ class SMM_CSV {
                 $status = 'scheduled';
             }
 
+            // Competition: find or create by name
+            $comp_name = trim($data['competition'] ?? '');
+            $comp_id = 0;
+            if ($comp_name) {
+                $comp_id = self::find_or_create_competition($comp_name);
+            }
+
             $ins = array(
                 'match_date'     => $date,
                 'match_time'     => $time,
@@ -92,7 +88,8 @@ class SMM_CSV {
                 'location_id'    => $loc_id,
                 'location'       => $loc,
                 'status'         => $status,
-                'competition'    => sanitize_text_field($data['competition'] ?? ''),
+                'competition_id' => $comp_id,
+                'competition'    => $comp_name,
                 'round'          => sanitize_text_field($data['round'] ?? ''),
                 'notes'          => sanitize_textarea_field($data['notes'] ?? ''),
             );
@@ -105,7 +102,6 @@ class SMM_CSV {
         return $result;
     }
 
-    /** Export all matches as CSV string. */
     public static function export_matches() {
         $matches = SMM_Database::get_matches();
 
@@ -119,6 +115,7 @@ class SMM_CSV {
             $home = $m->home_team_id ? SMM_Teams::get_name($m->home_team_id) : $m->home_team;
             $away = $m->away_team_id ? SMM_Teams::get_name($m->away_team_id) : $m->away_team;
             $loc  = $m->location_id ? SMM_Locations::get_name($m->location_id) : $m->location;
+            $comp = $m->competition_id ? SMM_Competitions::get_name($m->competition_id) : $m->competition;
 
             fputcsv($out, array(
                 $m->match_date,
@@ -128,7 +125,7 @@ class SMM_CSV {
                 $away,
                 $loc,
                 $m->status,
-                $m->competition,
+                $comp,
                 $m->round,
                 $m->notes,
             ));
@@ -161,6 +158,18 @@ class SMM_CSV {
         if ($id) return intval($id);
 
         SMM_Locations::add($name, '', null, null, 30);
+        return intval($wpdb->insert_id);
+    }
+
+    private static function find_or_create_competition($name) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'soccer_competitions';
+        $id = $wpdb->get_var($wpdb->prepare(
+            "SELECT id FROM $table WHERE competition_name = %s", $name
+        ));
+        if ($id) return intval($id);
+
+        SMM_Competitions::add($name);
         return intval($wpdb->insert_id);
     }
 

@@ -13,11 +13,14 @@ class SMM_Shortcode {
     }
 
     public function display_matches($atts) {
+        
         $atts = shortcode_atts(array(
             'limit' => -1,
             'show_conflicts' => 'yes',
             'show_past' => 'no',
             'status' => '', // comma-separated list to include, e.g. "scheduled,confirmed"
+            'competition' => '',   // slug or name (matches competition_name), comma-separated
+            'competition_id' => 0, // explicit ID, takes precedence
         ), $atts);
 
         $where_parts = array();
@@ -30,6 +33,25 @@ class SMM_Shortcode {
             if ($statuses) {
                 $where_parts[] = "status IN ('" . implode("','", array_map('esc_sql', $statuses)) . "')";
             }
+        }
+
+        $competition_id = 0;
+        if (!empty($atts['competition_id'])) {
+            $competition_id = intval($atts['competition_id']);
+        } elseif (!empty($atts['competition'])) {
+            global $wpdb;
+            $names = array_map('trim', explode(',', $atts['competition']));
+            $placeholders = implode(',', array_fill(0, count($names), '%s'));
+            $ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$wpdb->prefix}soccer_competitions
+                 WHERE competition_name IN ($placeholders)", $names
+            ));
+            if ($ids) {
+                $where_parts[] = "competition_id IN (" . implode(',', array_map('intval', $ids)) . ")";
+            }
+        }
+        if ($competition_id) {
+            $where_parts[] = "competition_id = " . intval($competition_id);
         }
 
         $matches = SMM_Database::get_matches(array(
@@ -79,12 +101,23 @@ class SMM_Shortcode {
                             <?php echo $away_team ? SMM_Teams::get_logo_html($away_team, 'thumbnail') : ''; ?>
                             <span><?php echo esc_html($away_name); ?></span>
                         </td>
-                        <td>
+
+                        <!-- <td>
                             <?php echo esc_html($m->competition); ?>
+                            
                             <?php if ($m->round): ?>
                                 <small><?php echo esc_html($m->round); ?></small>
                             <?php endif; ?>
+                        </td> -->
+
+                        <td>
+                            <?php if ($m->competition_id): ?>
+                                <?php echo SMM_Competitions::badge_html($m->competition_id); ?>
+                            <?php else: ?>
+                                <?php echo esc_html($m->competition); ?>
+                            <?php endif; ?>
                         </td>
+
                         <td><?php echo esc_html($loc ? $loc->location_name : $m->location); ?></td>
                         <td class="smm-players">
                             <?php if (empty($attendance)): ?>—
