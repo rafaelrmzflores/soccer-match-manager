@@ -617,9 +617,11 @@ class SMM_Admin {
                             <td><?php echo esc_html($loc ? $loc->location_name : $m->location); ?></td>
                             <td><?php echo SMM_Helpers::status_badge($m->status); ?></td>
                             <td>
-                                <?php if (!empty($conflicts)): ?>
+                                <?php if (!empty($conflicts)):
+                                    $conflict_msgs = array_map(function($c) { return $c['message']; }, $conflicts);
+                                    ?>
                                     <span class="smm-conflict-warning"
-                                          title="<?php echo esc_attr(implode("\n", $conflicts)); ?>">
+                                        title="<?php echo esc_attr(implode("\n", $conflict_msgs)); ?>">
                                         ⚠️ <?php echo count($conflicts); ?>
                                     </span>
                                 <?php else: ?>

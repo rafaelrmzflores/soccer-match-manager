@@ -4,13 +4,25 @@ class SMM_Conflict_Checker {
     /**
      * Detect conflicts for a match.
      *
-     * Conflict rules (per other match on the same date with shared attending players):
+     * Returns an array of structured conflict records:
+     *   [
+     *     'other_id'    => int,
+     *     'type'        => 'time_overlap' | 'travel',
+     *     'message'     => string,  // pre-built display string
+     *     'shared'      => string,  // comma-separated player names
+     *     'maps_url'    => string,  // Google Maps directions (travel only)
+     *     'distance_km' => float,   // travel only
+     *     'gap_min'     => int,     // travel only
+     *     'needed_min'  => int,     // travel only
+     *   ]
+     *
+     * Rules (per other match on the same date with shared attending players):
      *  1. Time overlap — uses match_duration or a 2-hour default.
      *  2. Different locations only: gap < travel_time + destination buffer.
      *     (Same-location back-to-back games have no buffer requirement.)
      *
      * Only matches with status 'scheduled' or 'confirmed' participate.
-     * Only players whose availability is 'available' or 'maybe' count.
+     * Only players with availability 'available' or 'maybe' count.
      */
     public function check_match_conflicts($match_id) {
         global $wpdb;
@@ -44,12 +56,12 @@ class SMM_Conflict_Checker {
                 $p = SMM_Players::get($pid);
                 if ($p) $names[] = $p->player_name;
             }
+            $shared_txt = implode(', ', $names);
 
             $home = $other->home_team_id ? SMM_Teams::get_name($other->home_team_id) : $other->home_team;
             $away = $other->away_team_id ? SMM_Teams::get_name($other->away_team_id) : $other->away_team;
             $label = sprintf('%s vs %s at %s', $home, $away,
                 SMM_Helpers::fmt_time($other->match_time));
-            $shared_txt = implode(', ', $names);
 
             $dur_a = !empty($match->match_duration) ? intval($match->match_duration) : 120;
             $dur_b = !empty($other->match_duration) ? intval($other->match_duration) : 120;
@@ -61,9 +73,11 @@ class SMM_Conflict_Checker {
 
             // Rule 1: time overlap
             if (($start_a < $end_b) && ($start_b < $end_a)) {
-                $conflicts[] = sprintf(
-                    'Time overlap with %s — shared: %s',
-                    $label, $shared_txt
+                $conflicts[] = array(
+                    'other_id' => intval($other->id),
+                    'type'     => 'time_overlap',
+                    'message'  => sprintf('Time overlap with %s — shared: %s', $label, $shared_txt),
+                    'shared'   => $shared_txt,
                 );
                 continue;
             }
@@ -83,7 +97,7 @@ class SMM_Conflict_Checker {
             // Same location → no buffer needed
             if ($same_location) continue;
 
-            // Different locations with coordinates → travel check
+            // Travel check
             if ($la && $lb && $la->latitude !== null && $lb->latitude !== null) {
                 $gap_min = ($start_a >= $end_b)
                     ? ($start_a - $end_b) / 60
@@ -95,25 +109,70 @@ class SMM_Conflict_Checker {
                 );
 
                 $speed = SMM_Helpers::travel_speed_kmh();
-                $travel_min = ($km / max(5, $speed)) * 60 + 5; // +5 min overhead
+                $travel_min = ($km / max(5, $speed)) * 60 + 5;
 
-                // Only the destination's buffer applies on travel.
-                // The origin buffer is already reflected in the 5-min overhead.
+                // Only destination buffer applies
                 $destination = ($start_a >= $end_b) ? $lb : $la;
                 $dest_buffer = $destination ? intval($destination->travel_buffer_minutes) : 0;
-
                 $needed = $travel_min + $dest_buffer;
 
                 if ($gap_min < $needed) {
-                    $conflicts[] = sprintf(
-                        'Travel conflict with %s (%.1f km apart, ~%d min needed incl. buffer, only %d min gap) — shared: %s',
-                        $label, $km, (int) ceil($needed), (int) floor($gap_min), $shared_txt
+                    // Direction of travel: earlier match → later match
+                    $earlier = ($start_a < $start_b) ? $la : $lb;
+                    $later   = ($start_a < $start_b) ? $lb : $la;
+
+                    $conflicts[] = array(
+                        'other_id'    => intval($other->id),
+                        'type'        => 'travel',
+                        'message'     => sprintf(
+                            'Travel conflict with %s (%.1f km apart, ~%d min needed incl. buffer, only %d min gap) — shared: %s',
+                            $label, $km, (int) ceil($needed), (int) floor($gap_min), $shared_txt
+                        ),
+                        'shared'      => $shared_txt,
+                        'maps_url'    => self::build_maps_url($earlier, $later),
+                        'distance_km' => round($km, 1),
+                        'gap_min'     => (int) floor($gap_min),
+                        'needed_min'  => (int) ceil($needed),
                     );
                 }
             }
         }
 
         return $conflicts;
+    }
+
+    /**
+     * Build a Google Maps directions URL between two location records.
+     * Prefers coordinates; falls back to address string.
+     * Returns '' if either location lacks enough information.
+     */
+    public static function build_maps_url($loc_a, $loc_b) {
+        if (!$loc_a || !$loc_b) return '';
+
+        $origin      = self::location_query($loc_a);
+        $destination = self::location_query($loc_b);
+
+        if (!$origin || !$destination) return '';
+
+        return add_query_arg(
+            array(
+                'api'         => '1',
+                'origin'      => $origin,
+                'destination' => $destination,
+                'travelmode'  => 'driving',
+            ),
+            'https://www.google.com/maps/dir/'
+        );
+    }
+
+    private static function location_query($loc) {
+        if ($loc->latitude !== null && $loc->longitude !== null) {
+            return $loc->latitude . ',' . $loc->longitude;
+        }
+        if (!empty($loc->location_address)) {
+            return $loc->location_address;
+        }
+        return '';
     }
 
     /**
@@ -139,7 +198,7 @@ class SMM_Conflict_Checker {
             $filtered = array();
 
             foreach ($conflicts as $c) {
-                $other = $this->find_conflicting_match($m, $c);
+                $other = $this->find_conflicting_match($m, $c['message']);
                 if (!$other) {
                     $filtered[] = $c;
                     continue;

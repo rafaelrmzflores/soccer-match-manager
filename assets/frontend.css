@@ -873,3 +873,21 @@
     color: var(--smm-fg-muted, #6b7280);
     font-size: 12px;
 }
+/* =====================================================================
+   Google Maps links inside conflict messages
+   ===================================================================== */
+
+.smm-maps-link {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: text-decoration-style .15s ease;
+}
+.smm-maps-link:hover,
+.smm-maps-link:focus {
+    text-decoration-style: solid;
+    outline: none;
+}
