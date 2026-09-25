@@ -891,3 +891,94 @@
     text-decoration-style: solid;
     outline: none;
 }
+/* =====================================================================
+   Conflicts grouped by player
+   ===================================================================== */
+
+.smm-conflicts--by-player {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.smm-player-conflict {
+    background: var(--smm-bg, #fff);
+    border: 1px solid var(--smm-border, #e5e7eb);
+    border-left: 4px solid var(--smm-warn-bd, #f59e0b);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.smm-player-conflict__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--smm-warn-bg, #fffbeb);
+    color: var(--smm-warn-fg, #92400e);
+    border-bottom: 1px solid var(--smm-warn-bd, #fcd34d);
+}
+.smm-player-conflict__name {
+    font-size: 15px;
+    font-weight: 700;
+}
+.smm-player-conflict__count {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    white-space: nowrap;
+    opacity: .9;
+}
+
+.smm-player-conflict__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.smm-player-conflict__item {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--smm-border, #e5e7eb);
+    font-size: 14px;
+}
+.smm-player-conflict__item:last-child { border-bottom: none; }
+
+.smm-player-conflict__when {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 12px;
+    color: var(--smm-fg-muted, #6b7280);
+    margin-bottom: 4px;
+}
+.smm-player-conflict__date { font-weight: 600; color: var(--smm-fg, #1a1a1a); }
+.smm-player-conflict__time { font-size: 13px; }
+
+.smm-player-conflict__match {
+    font-size: 14px;
+    color: var(--smm-fg, #1a1a1a);
+    margin-bottom: 4px;
+}
+.smm-player-conflict__vs {
+    color: var(--smm-fg-muted, #6b7280);
+    font-size: 11px;
+    text-transform: uppercase;
+    margin: 0 4px;
+}
+.smm-player-conflict__loc {
+    color: var(--smm-fg-muted, #6b7280);
+    font-size: 12px;
+    margin-left: 4px;
+}
+.smm-player-conflict__reason {
+    font-size: 13px;
+    color: var(--smm-danger-fg, #991b1b);
+    line-height: 1.45;
+}
+
+@media (max-width: 600px) {
+    .smm-player-conflict__head { padding: 10px 12px; }
+    .smm-player-conflict__item { padding: 8px 12px; }
+    .smm-player-conflict__match { font-size: 13px; }
+}

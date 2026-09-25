@@ -189,3 +189,108 @@
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
+/* =====================================================================
+   Conflicts by player — admin panel
+   ===================================================================== */
+
+.smm-conflict-panel {
+    margin: 12px 0 16px;
+    border: 1px solid #fcd34d;
+    border-radius: 6px;
+    background: #fffbeb;
+    overflow: hidden;
+}
+
+.smm-conflict-panel__summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #92400e;
+    font-size: 13px;
+    user-select: none;
+    list-style: none;
+}
+.smm-conflict-panel__summary::-webkit-details-marker { display: none; }
+.smm-conflict-panel__summary::before {
+    content: "▸";
+    display: inline-block;
+    transition: transform .15s ease;
+    font-size: 11px;
+    opacity: .7;
+}
+.smm-conflict-panel[open] .smm-conflict-panel__summary::before {
+    transform: rotate(90deg);
+}
+.smm-conflict-panel__summary:hover {
+    background: #fef3c7;
+}
+.smm-conflict-panel__icon { font-size: 15px; }
+.smm-conflict-panel__hint {
+    margin-left: auto;
+    font-size: 11px;
+    opacity: .6;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+
+.smm-conflict-panel__body {
+    padding: 12px 16px;
+    background: #fff;
+    border-top: 1px solid #fcd34d;
+}
+
+.smm-conflict-panel__group {
+    padding: 10px 0;
+    border-bottom: 1px dashed #e5e7eb;
+}
+.smm-conflict-panel__group:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+.smm-conflict-panel__group:first-child { padding-top: 0; }
+
+.smm-conflict-panel__name {
+    font-weight: 600;
+    font-size: 14px;
+    color: #1f2937;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.smm-conflict-panel__count {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: #fcd34d;
+    color: #92400e;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.smm-conflict-panel__list {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 14px;
+    font-size: 13px;
+}
+.smm-conflict-panel__list li {
+    padding: 3px 0;
+    color: #4b5563;
+    position: relative;
+}
+.smm-conflict-panel__list li::before {
+    content: "·";
+    position: absolute;
+    left: -10px;
+    color: #9ca3af;
+}
+.smm-conflict-panel__list a {
+    color: #2271b1;
+    text-decoration: none;
+}
+.smm-conflict-panel__list a:hover {
+    text-decoration: underline;
+}

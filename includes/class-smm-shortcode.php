@@ -18,7 +18,7 @@ class SMM_Shortcode {
 
     public function display_matches($atts) {
         $atts = shortcode_atts(array(
-            'view'           => 'cards',        // cards | compact | list
+            'view'           => 'cards',
             'limit'          => -1,
             'show_conflicts' => 'yes',
             'show_past'      => 'no',
@@ -71,7 +71,6 @@ class SMM_Shortcode {
         }
 
         $checker = new SMM_Conflict_Checker();
-
         $rows = array();
         foreach ($matches as $m) {
             $rows[] = $this->prepare_match_row($m, $checker, $atts);
@@ -89,31 +88,32 @@ class SMM_Shortcode {
         $conflicts = $checker->check_match_conflicts($m->id);
         $show_players = ($atts['show_players'] === 'yes');
 
+        $messages = array();
+        foreach ($conflicts as $c) {
+            $n = $this->normalize_conflict($c);
+            $messages[] = $n['message'];
+        }
+
         $home_team = $m->home_team_id ? SMM_Teams::get($m->home_team_id) : null;
         $away_team = $m->away_team_id ? SMM_Teams::get($m->away_team_id) : null;
         $loc       = $m->location_id  ? SMM_Locations::get($m->location_id) : null;
         $comp      = $m->competition_id ? SMM_Competitions::get($m->competition_id) : null;
 
-        $messages = array();
-        foreach ($conflicts as $c) {
-            $messages[] = $c['message'];
-        }
-
         return array(
-            'match'        => $m,
-            'conflicts'    => $conflicts,
-            'conflict_msgs'=> $messages,
-            'has_conflict' => !empty($conflicts),
-            'home_team'    => $home_team,
-            'away_team'    => $away_team,
-            'loc'          => $loc,
-            'comp'         => $comp,
-            'home_name'    => $home_team ? $home_team->team_name : $m->home_team,
-            'away_name'    => $away_team ? $away_team->team_name : $m->away_team,
-            'loc_name'     => $loc ? $loc->location_name : $m->location,
-            'attendance'   => $show_players ? SMM_Database::get_attendance($m->id) : array(),
-            'is_canceled'  => $m->status === 'canceled',
-            'is_postponed' => $m->status === 'postponed',
+            'match'         => $m,
+            'conflicts'     => $conflicts,
+            'conflict_msgs' => $messages,
+            'has_conflict'  => !empty($conflicts),
+            'home_team'     => $home_team,
+            'away_team'     => $away_team,
+            'loc'           => $loc,
+            'comp'          => $comp,
+            'home_name'     => $home_team ? $home_team->team_name : $m->home_team,
+            'away_name'     => $away_team ? $away_team->team_name : $m->away_team,
+            'loc_name'      => $loc ? $loc->location_name : $m->location,
+            'attendance'    => $show_players ? SMM_Database::get_attendance($m->id) : array(),
+            'is_canceled'   => $m->status === 'canceled',
+            'is_postponed'  => $m->status === 'postponed',
         );
     }
 
@@ -395,16 +395,24 @@ class SMM_Shortcode {
 
     public function display_conflicts($atts) {
         $atts = shortcode_atts(array(
-            'view'         => 'cards',   // cards | compact | minimal
+            'view'         => 'cards',   // cards | compact | minimal | by-player
             'show_players' => 'yes',
         ), $atts);
 
-        $view = in_array($atts['view'], array('cards','compact','minimal'), true)
+        $view = in_array($atts['view'], array('cards','compact','minimal','by-player'), true)
             ? $atts['view'] : 'cards';
 
         $checker = new SMM_Conflict_Checker();
-        $all = $checker->get_all_conflicts();
 
+        if ($view === 'by-player') {
+            $by_player = $checker->get_conflicts_by_player();
+            if (empty($by_player)) {
+                return '<div class="smm-conflicts-empty">✓ No schedule conflicts detected.</div>';
+            }
+            return $this->render_conflicts_by_player($by_player, $atts);
+        }
+
+        $all = $checker->get_all_conflicts();
         if (empty($all)) {
             return '<div class="smm-conflicts-empty">✓ No schedule conflicts detected.</div>';
         }
@@ -415,39 +423,6 @@ class SMM_Shortcode {
             case 'cards':
             default:        return $this->render_conflicts_cards($all, $atts);
         }
-    }
-
-    /**
-     * Turn "X.Y km apart" in a conflict message into a Google Maps link.
-     * Escapes the message first, then injects our own trusted anchor.
-     */
-    private function linkify_distance($msg, $maps_url) {
-        if (!$maps_url) return esc_html($msg);
-
-        $escaped = esc_html($msg);
-        $pattern = '/(\d+(?:\.\d+)?\s*km apart)/';
-        $replacement = sprintf(
-            '<a href="%s" target="_blank" rel="noopener noreferrer" class="smm-maps-link">$1&nbsp;↗</a>',
-            esc_url($maps_url)
-        );
-        return preg_replace($pattern, $replacement, $escaped);
-    }
-
-    /** Normalize a conflict record (handles both new structured and legacy string). */
-    private function normalize_conflict($c) {
-        if (is_string($c)) {
-            return array('message' => $c, 'shared' => '', 'maps_url' => '');
-        }
-        return array(
-            'message'  => $c['message']  ?? '',
-            'shared'   => $c['shared']   ?? '',
-            'maps_url' => $c['maps_url'] ?? '',
-        );
-    }
-
-    /** Strip the "— shared: X" suffix from a message for display. */
-    private function strip_shared_suffix($msg) {
-        return trim(preg_replace('/—\s*shared:\s*.+$/u', '', $msg), " \t\n\r\0\x0B—-");
     }
 
     private function render_conflicts_cards($all, $atts) {
@@ -632,6 +607,85 @@ class SMM_Shortcode {
         return ob_get_clean();
     }
 
+    private function render_conflicts_by_player($by_player, $atts) {
+        $home = function($m) {
+            return $m->home_team_id ? SMM_Teams::get_name($m->home_team_id) : $m->home_team;
+        };
+        $away = function($m) {
+            return $m->away_team_id ? SMM_Teams::get_name($m->away_team_id) : $m->away_team;
+        };
+        $loc = function($m) {
+            $l = $m->location_id ? SMM_Locations::get($m->location_id) : null;
+            return $l ? $l->location_name : $m->location;
+        };
+
+        $total_conflicts = 0;
+        foreach ($by_player as $p) $total_conflicts += $p['count'];
+
+        ob_start();
+        ?>
+        <div class="smm-conflicts smm-conflicts--by-player">
+            <div class="smm-conflicts__header">
+                <span class="smm-conflicts__icon">⚠️</span>
+                <div>
+                    <h3 class="smm-conflicts__title">Conflicts Grouped by Player</h3>
+                    <p class="smm-conflicts__subtitle">
+                        <?php echo count($by_player); ?>
+                        player<?php echo count($by_player) === 1 ? '' : 's'; ?>
+                        affected —
+                        <?php echo $total_conflicts; ?>
+                        total conflict<?php echo $total_conflicts === 1 ? '' : 's'; ?>
+                    </p>
+                </div>
+            </div>
+
+            <?php foreach ($by_player as $name => $group): ?>
+                <article class="smm-player-conflict">
+                    <header class="smm-player-conflict__head">
+                        <span class="smm-player-conflict__name">
+                            <?php echo esc_html($name); ?>
+                        </span>
+                        <span class="smm-player-conflict__count">
+                            <?php echo intval($group['count']); ?>
+                            conflict<?php echo $group['count'] === 1 ? '' : 's'; ?>
+                        </span>
+                    </header>
+
+                    <ul class="smm-player-conflict__list">
+                        <?php foreach ($group['conflicts'] as $c):
+                            $m = $c['match'];
+                            $msg = $this->strip_shared_suffix($c['message']);
+                            ?>
+                            <li class="smm-player-conflict__item">
+                                <div class="smm-player-conflict__when">
+                                    <span class="smm-player-conflict__date">
+                                        <?php echo esc_html(SMM_Helpers::fmt_date($m->match_date)); ?>
+                                    </span>
+                                    <span class="smm-player-conflict__time">
+                                        <?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?>
+                                    </span>
+                                </div>
+                                <div class="smm-player-conflict__match">
+                                    <strong><?php echo esc_html($home($m)); ?></strong>
+                                    <span class="smm-player-conflict__vs">vs</span>
+                                    <strong><?php echo esc_html($away($m)); ?></strong>
+                                    <span class="smm-player-conflict__loc">
+                                        · 📍 <?php echo esc_html($loc($m)); ?>
+                                    </span>
+                                </div>
+                                <div class="smm-player-conflict__reason">
+                                    <?php echo $this->linkify_distance($msg, $c['maps_url']); ?>
+                                </div>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </article>
+            <?php endforeach; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
     /* ============================================================
        TEAMS
        ============================================================ */
@@ -651,5 +705,59 @@ class SMM_Shortcode {
         </div>
         <?php
         return ob_get_clean();
+    }
+
+    /* ============================================================
+       HELPERS
+       ============================================================ */
+
+    /**
+     * Normalize a conflict record. Handles both the structured array
+     * returned by the v6.2+ conflict checker and legacy string records.
+     */
+    private function normalize_conflict($c) {
+        if (is_string($c)) {
+            return array(
+                'message'  => $c,
+                'shared'   => '',
+                'maps_url' => '',
+                'type'     => '',
+            );
+        }
+        if (!is_array($c)) {
+            return array('message' => '', 'shared' => '', 'maps_url' => '', 'type' => '');
+        }
+        return array(
+            'message'  => $c['message']  ?? '',
+            'shared'   => $c['shared']   ?? '',
+            'maps_url' => $c['maps_url'] ?? '',
+            'type'     => $c['type']     ?? '',
+        );
+    }
+
+    /**
+     * Strip the "— shared: X" suffix from a conflict message so the
+     * shared players can be rendered separately.
+     */
+    private function strip_shared_suffix($msg) {
+        if (!is_string($msg) || $msg === '') return '';
+        return trim(preg_replace('/—\s*shared:\s*.+$/u', '', $msg), " \t\n\r\0\x0B—-");
+    }
+
+    /**
+     * Turn "X.Y km apart" in a conflict message into a Google Maps link.
+     * Escapes the message first, then injects our own trusted anchor.
+     */
+    private function linkify_distance($msg, $maps_url) {
+        if (!is_string($msg)) $msg = '';
+        if (!$maps_url) return esc_html($msg);
+
+        $escaped = esc_html($msg);
+        $pattern = '/(\d+(?:\.\d+)?\s*km apart)/';
+        $replacement = sprintf(
+            '<a href="%s" target="_blank" rel="noopener noreferrer" class="smm-maps-link">$1&nbsp;↗</a>',
+            esc_url($maps_url)
+        );
+        return preg_replace($pattern, $replacement, $escaped);
     }
 }

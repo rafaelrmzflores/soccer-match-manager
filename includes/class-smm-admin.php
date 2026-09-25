@@ -488,7 +488,56 @@ class SMM_Admin {
                 <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=smm-matches&smm_export=matches'), 'smm_export_matches'); ?>"
                    class="page-title-action">Export CSV</a>
             </h1>
-
+                        <?php
+            // ---- Conflicts by player panel ----
+            $conflict_checker = new SMM_Conflict_Checker();
+            $by_player = $conflict_checker->get_conflicts_by_player();
+            if (!empty($by_player)):
+                $total = 0;
+                foreach ($by_player as $g) $total += $g['count'];
+                ?>
+                <details class="smm-conflict-panel">
+                    <summary class="smm-conflict-panel__summary">
+                        <span class="smm-conflict-panel__icon">⚠️</span>
+                        <strong><?php echo intval($total); ?></strong>
+                        conflict<?php echo $total === 1 ? '' : 's'; ?>
+                        across
+                        <strong><?php echo count($by_player); ?></strong>
+                        player<?php echo count($by_player) === 1 ? '' : 's'; ?>
+                        <span class="smm-conflict-panel__hint">Click to expand</span>
+                    </summary>
+                    <div class="smm-conflict-panel__body">
+                        <?php foreach ($by_player as $name => $g): ?>
+                            <div class="smm-conflict-panel__group">
+                                <div class="smm-conflict-panel__name">
+                                    <?php echo esc_html($name); ?>
+                                    <span class="smm-conflict-panel__count">
+                                        <?php echo intval($g['count']); ?>
+                                    </span>
+                                </div>
+                                <ul class="smm-conflict-panel__list">
+                                    <?php foreach ($g['conflicts'] as $c):
+                                        $cm = $c['match'];
+                                        $chome = $cm->home_team_id ? SMM_Teams::get_name($cm->home_team_id) : $cm->home_team;
+                                        $caway = $cm->away_team_id ? SMM_Teams::get_name($cm->away_team_id) : $cm->away_team;
+                                        ?>
+                                        <li>
+                                            <a href="<?php echo admin_url('admin.php?page=smm-add-match&id=' . $cm->id); ?>">
+                                                <?php echo esc_html(SMM_Helpers::fmt_date($cm->match_date)); ?>
+                                                <?php echo esc_html(SMM_Helpers::fmt_time($cm->match_time)); ?>
+                                                —
+                                                <?php echo esc_html($chome); ?>
+                                                vs
+                                                <?php echo esc_html($caway); ?>
+                                            </a>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </details>
+            <?php endif; ?>
             <?php if (isset($_GET['message'])): ?>
                 <div class="notice notice-success is-dismissible"><p><?php
                     $m = array(

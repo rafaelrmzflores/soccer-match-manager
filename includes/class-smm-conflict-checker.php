@@ -251,4 +251,68 @@ class SMM_Conflict_Checker {
     public function count_conflicts() {
         return count($this->get_all_conflicts());
     }
+
+    /**
+     * Regroup the conflicts from get_all_conflicts() by shared player.
+     *
+     * Returns:
+     *   array(
+     *     'Rafael Ramirez' => array(
+     *        'player_name' => 'Rafael Ramirez',
+     *        'count'       => 3,
+     *        'conflicts'   => array(
+     *           array('match' => <match row>, 'message' => '...', 'maps_url' => '...', 'type' => 'travel'),
+     *           ...
+     *        ),
+     *     ),
+     *     ...
+     *   )
+     *
+     * Sorted: most conflicts first, then alphabetically by name.
+     */
+    public function get_conflicts_by_player() {
+        $all = $this->get_all_conflicts();
+        $by_player = array();
+
+        foreach ($all as $data) {
+            $match = $data['match'];
+            foreach ($data['conflicts'] as $c) {
+                if (is_string($c)) {
+                    $c = array('message' => $c, 'shared' => '', 'maps_url' => '', 'type' => '');
+                }
+                $shared = trim($c['shared'] ?? '');
+                if (!$shared) continue;
+
+                // A conflict can name multiple shared players — split on comma
+                $names = array_map('trim', explode(',', $shared));
+                foreach ($names as $name) {
+                    if (!$name) continue;
+                    if (!isset($by_player[$name])) {
+                        $by_player[$name] = array(
+                            'player_name' => $name,
+                            'count'       => 0,
+                            'conflicts'   => array(),
+                        );
+                    }
+                    $by_player[$name]['conflicts'][] = array(
+                        'match'    => $match,
+                        'message'  => $c['message'] ?? '',
+                        'maps_url' => $c['maps_url'] ?? '',
+                        'type'     => $c['type'] ?? '',
+                    );
+                    $by_player[$name]['count']++;
+                }
+            }
+        }
+
+        // Sort: most conflicts first, then alphabetical
+        uasort($by_player, function($a, $b) {
+            if ($a['count'] === $b['count']) {
+                return strcasecmp($a['player_name'], $b['player_name']);
+            }
+            return $b['count'] - $a['count'];
+        });
+
+        return $by_player;
+    }
 }
