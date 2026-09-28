@@ -11,6 +11,19 @@ class SMM_Database {
         $locations    = $wpdb->prefix . 'soccer_locations';
         $attendance   = $wpdb->prefix . 'soccer_attendance';
         $competitions = $wpdb->prefix . 'soccer_competitions';
+        $leagues      = $wpdb->prefix . 'soccer_leagues';
+
+        $sql_leagues = "CREATE TABLE $leagues (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            league_name varchar(150) NOT NULL,
+            season varchar(50) DEFAULT '',
+            age_group varchar(50) DEFAULT '',
+            color varchar(7) DEFAULT '#0d6efd',
+            notes text,
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE KEY league_name (league_name)
+        ) $charset_collate;";
 
         $sql_competitions = "CREATE TABLE $competitions (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -19,10 +32,17 @@ class SMM_Database {
             season varchar(50) DEFAULT '',
             age_group varchar(50) DEFAULT '',
             color varchar(7) DEFAULT '#0d6efd',
+            league_id mediumint(9) DEFAULT 0,
+            periods smallint DEFAULT 2,
+            period_minutes smallint DEFAULT 45,
+            break_minutes smallint DEFAULT 5,
+            halftime_minutes smallint DEFAULT 15,
+            water_break_minutes smallint DEFAULT 0,
             notes text,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            UNIQUE KEY competition_name (competition_name)
+            UNIQUE KEY competition_name (competition_name),
+            KEY league_id (league_id)
         ) $charset_collate;";
 
         $sql_teams = "CREATE TABLE $teams (
@@ -30,9 +50,11 @@ class SMM_Database {
             team_name varchar(150) NOT NULL,
             team_logo_id bigint(20) DEFAULT 0,
             default_duration smallint DEFAULT NULL,
+            league_id mediumint(9) DEFAULT 0,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
-            UNIQUE KEY team_name (team_name)
+            UNIQUE KEY team_name (team_name),
+            KEY league_id (league_id)
         ) $charset_collate;";
 
         $sql_players = "CREATE TABLE $players (
@@ -63,7 +85,7 @@ class SMM_Database {
         $sql_matches = "CREATE TABLE $matches (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             match_date date NOT NULL,
-            match_time time NOT NULL,
+            match_time time DEFAULT NULL,
             match_duration smallint DEFAULT NULL,
             home_team_id mediumint(9) DEFAULT 0,
             away_team_id mediumint(9) DEFAULT 0,
@@ -97,6 +119,7 @@ class SMM_Database {
         ) $charset_collate;";
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql_leagues);
         dbDelta($sql_competitions);
         dbDelta($sql_teams);
         dbDelta($sql_players);
@@ -104,9 +127,16 @@ class SMM_Database {
         dbDelta($sql_matches);
         dbDelta($sql_attendance);
 
+        // Backfill defaults
         $wpdb->query("UPDATE $matches SET status = 'scheduled' WHERE status IS NULL OR status = ''");
         $wpdb->query("UPDATE $players SET availability = 'available' WHERE availability IS NULL OR availability = ''");
+        $wpdb->query("UPDATE $competitions SET periods = 2 WHERE periods IS NULL");
+        $wpdb->query("UPDATE $competitions SET period_minutes = 45 WHERE period_minutes IS NULL");
+        $wpdb->query("UPDATE $competitions SET break_minutes = 5 WHERE break_minutes IS NULL");
+        $wpdb->query("UPDATE $competitions SET halftime_minutes = 15 WHERE halftime_minutes IS NULL");
+        $wpdb->query("UPDATE $competitions SET water_break_minutes = 0 WHERE water_break_minutes IS NULL");
 
+        // Legacy migrations
         self::migrate_legacy_competitions();
     }
 
@@ -204,7 +234,7 @@ class SMM_Database {
             $params[] = intval($args['competition_id']);
         }
 
-        // --- Safe multi-column ORDER BY ---
+        // Safe multi-column ORDER BY
         $allowed_cols = array(
             'id', 'match_date', 'match_time', 'match_duration',
             'home_team', 'away_team', 'location', 'status',
@@ -214,15 +244,10 @@ class SMM_Database {
 
         $requested = array();
         foreach (array_map('trim', explode(',', $args['orderby'])) as $col) {
-            if (in_array($col, $allowed_cols, true)) {
-                $requested[] = $col;
-            }
+            if (in_array($col, $allowed_cols, true)) $requested[] = $col;
         }
-        if (empty($requested)) {
-            $requested = array('match_date', 'match_time');
-        }
+        if (empty($requested)) $requested = array('match_date', 'match_time');
 
-        // Always keep chronological as a secondary sort unless sorting by id
         if (!in_array('match_date', $requested, true) && $requested !== array('id')) {
             $requested[] = 'match_date';
         }
@@ -230,13 +255,10 @@ class SMM_Database {
             && !in_array('match_time', $requested, true)) {
             $requested[] = 'match_time';
         }
-
         $requested = array_values(array_unique($requested));
 
         $orderby_parts = array();
-        foreach ($requested as $col) {
-            $orderby_parts[] = $col . ' ' . $order;
-        }
+        foreach ($requested as $col) $orderby_parts[] = $col . ' ' . $order;
 
         $sql = "SELECT * FROM $table";
         if ($conds) $sql .= ' WHERE ' . implode(' AND ', $conds);
