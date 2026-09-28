@@ -51,6 +51,7 @@ class SMM_Locations {
     public static function delete($id) {
         global $wpdb;
         $id = intval($id);
+        $wpdb->delete($wpdb->prefix . 'soccer_team_locations', array('location_id' => $id), array('%d'));
         $wpdb->query($wpdb->prepare(
             "UPDATE {$wpdb->prefix}soccer_matches SET location_id = 0 WHERE location_id = %d", $id
         ));

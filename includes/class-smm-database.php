@@ -12,6 +12,7 @@ class SMM_Database {
         $attendance   = $wpdb->prefix . 'soccer_attendance';
         $competitions = $wpdb->prefix . 'soccer_competitions';
         $leagues      = $wpdb->prefix . 'soccer_leagues';
+        $team_locations = $wpdb->prefix . 'soccer_team_locations';
 
         $sql_leagues = "CREATE TABLE $leagues (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -119,6 +120,17 @@ class SMM_Database {
             KEY player_id (player_id)
         ) $charset_collate;";
 
+        $sql_team_locations = "CREATE TABLE $team_locations (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            team_id mediumint(9) NOT NULL,
+            location_id mediumint(9) NOT NULL,
+            is_primary tinyint(1) DEFAULT 0,
+            PRIMARY KEY (id),
+            UNIQUE KEY team_location (team_id, location_id),
+            KEY team_id (team_id),
+            KEY location_id (location_id)
+        ) $charset_collate;";
+
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql_leagues);
         dbDelta($sql_competitions);
@@ -127,6 +139,7 @@ class SMM_Database {
         dbDelta($sql_locations);
         dbDelta($sql_matches);
         dbDelta($sql_attendance);
+        dbDelta($sql_team_locations);
 
         // Backfill defaults
         $wpdb->query("UPDATE $matches SET status = 'scheduled' WHERE status IS NULL OR status = ''");

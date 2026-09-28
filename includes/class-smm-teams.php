@@ -82,6 +82,7 @@ class SMM_Teams {
     public static function delete($id) {
         global $wpdb;
         $id = intval($id);
+        $wpdb->delete($wpdb->prefix . 'soccer_team_locations', array('team_id' => $id), array('%d'));
         $wpdb->update($wpdb->prefix . 'soccer_players',
             array('team_id' => 0), array('team_id' => $id));
         $wpdb->query($wpdb->prepare(
@@ -97,5 +98,110 @@ class SMM_Teams {
             'class' => $class, 'alt' => esc_attr($team->team_name)
         ));
         return $img ?: '';
+    }
+
+        /**
+     * Returns all locations associated with a team, primary first.
+     * Each row is joined with the location record for convenience.
+     */
+    public static function get_venues($team_id) {
+        global $wpdb;
+        $tl = $wpdb->prefix . 'soccer_team_locations';
+        $loc = $wpdb->prefix . 'soccer_locations';
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT tl.id AS link_id, tl.location_id, tl.is_primary,
+                    l.location_name, l.location_address
+             FROM $tl tl
+             JOIN $loc l ON l.id = tl.location_id
+             WHERE tl.team_id = %d
+             ORDER BY tl.is_primary DESC, l.location_name ASC",
+            intval($team_id)
+        ));
+    }
+
+    /**
+     * Returns the primary location_id for a team, or 0 if none.
+     * Falls back to the first venue if none is flagged primary.
+     */
+    public static function get_primary_location_id($team_id) {
+        global $wpdb;
+        $tl = $wpdb->prefix . 'soccer_team_locations';
+        $loc = $wpdb->prefix . 'soccer_locations';
+
+        $id = $wpdb->get_var($wpdb->prepare(
+            "SELECT tl.location_id 
+             FROM $tl tl
+             JOIN $loc l ON l.id = tl.location_id
+             WHERE tl.team_id = %d 
+             ORDER BY tl.is_primary DESC, l.location_name ASC
+             LIMIT 1",
+            intval($team_id)
+        ));
+        return $id ? intval($id) : 0;
+    }
+
+    /**
+     * Replaces the venues for a team.
+     * $venues is an array of ['location_id' => int, 'is_primary' => bool].
+     */
+    public static function set_venues($team_id, $venues) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'soccer_team_locations';
+        $team_id = intval($team_id);
+
+        $wpdb->delete($table, array('team_id' => $team_id), array('%d'));
+
+        if (empty($venues)) return;
+
+        // Ensure at most one is marked primary
+        $has_primary = false;
+        foreach ($venues as $v) {
+            if (!empty($v['is_primary'])) { $has_primary = true; break; }
+        }
+
+        $first = true;
+        foreach ($venues as $v) {
+            $loc_id = intval($v['location_id']);
+            if (!$loc_id) continue;
+
+            $is_primary = 0;
+            if (!empty($v['is_primary'])) {
+                $is_primary = 1;
+            } elseif (!$has_primary && $first) {
+                // Fallback: first row becomes primary if none flagged
+                $is_primary = 1;
+            }
+            $first = false;
+
+            $wpdb->insert($table, array(
+                'team_id'     => $team_id,
+                'location_id' => $loc_id,
+                'is_primary'  => $is_primary,
+            ));
+        }
+    }
+
+    /**
+     * Map: team_id → primary location_id. Used by the match form JS.
+     */
+    public static function get_primary_location_map() {
+        global $wpdb;
+        $tl = $wpdb->prefix . 'soccer_team_locations';
+
+        $rows = $wpdb->get_results(
+            "SELECT team_id, location_id, is_primary 
+             FROM $tl 
+             ORDER BY is_primary DESC, location_id ASC"
+        );
+        $map = array();
+        foreach ($rows as $r) {
+            $tid = intval($r->team_id);
+            // First row per team wins (primary sorts first)
+            if (!isset($map[$tid])) {
+                $map[$tid] = intval($r->location_id);
+            }
+        }
+        return $map;
     }
 }

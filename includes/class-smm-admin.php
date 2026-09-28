@@ -253,17 +253,24 @@ class SMM_Admin {
                 $_POST['default_duration'] ?? null,
                 intval($_POST['team_league_id'] ?? 0)
             );
+            global $wpdb;
+            $new_team_id = intval($wpdb->insert_id);
+            if ($new_team_id) {
+                SMM_Teams::set_venues($new_team_id, $this->parse_venue_rows());
+            }
             wp_redirect(admin_url('admin.php?page=smm-teams&message=team_added'));
             exit;
         }
         if (isset($_POST['smm_update_team']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_update_team')) {
+            $team_id = intval($_POST['team_id']);
             SMM_Teams::update(
-                intval($_POST['team_id']),
+                $team_id,
                 $_POST['team_name'] ?? '',
                 intval($_POST['team_logo_id'] ?? 0),
                 $_POST['default_duration'] ?? null,
                 intval($_POST['team_league_id'] ?? 0)
             );
+            SMM_Teams::set_venues($team_id, $this->parse_venue_rows());
             wp_redirect(admin_url('admin.php?page=smm-teams&message=team_updated'));
             exit;
         }
@@ -863,7 +870,8 @@ class SMM_Admin {
             <?php endif; ?>
 
             <form method="post" id="smm-match-form"
-                  data-my-team-ids="<?php echo esc_attr(implode(',', $my_team_ids)); ?>">
+                  data-my-team-ids="<?php echo esc_attr(implode(',', $my_team_ids)); ?>"
+                  data-team-primary-locations="<?php echo esc_attr(wp_json_encode(SMM_Teams::get_primary_location_map())); ?>">
                 <?php wp_nonce_field('smm_save_match', 'smm_nonce'); ?>
                 <?php if ($match): ?>
                     <input type="hidden" name="match_id" value="<?php echo $match->id; ?>">
@@ -1515,6 +1523,70 @@ class SMM_Admin {
                                     </div>
                                 </td>
                             </tr>
+                            <tr>
+                                <th>Home Venues</th>
+                                <td>
+                                    <?php
+                                    $team_venues = array();
+                                    if ($edit_team) {
+                                        $team_venues = SMM_Teams::get_venues($edit_team->id);
+                                    }
+                                    $all_locations = SMM_Locations::get_all();
+                                    ?>
+                                    <div id="smm-team-venues" class="smm-team-venues">
+                                        <?php
+                                        $idx = 0;
+                                        if (empty($team_venues)): ?>
+                                            <div class="smm-venue-row">
+                                                <select name="venue[0][location_id]" class="smm-venue-select">
+                                                    <option value="">— Select —</option>
+                                                    <?php foreach ($all_locations as $l): ?>
+                                                        <option value="<?php echo $l->id; ?>">
+                                                            <?php echo esc_html($l->location_name); ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                                <label class="smm-venue-primary">
+                                                    <input type="radio" name="smm_venue_primary" value="0" checked>
+                                                    Primary
+                                                </label>
+                                                <button type="button" class="button-link smm-venue-remove">Remove</button>
+                                            </div>
+                                        <?php else:
+                                            foreach ($team_venues as $v): ?>
+                                                <div class="smm-venue-row">
+                                                    <select name="venue[<?php echo $idx; ?>][location_id]" class="smm-venue-select">
+                                                        <option value="">— Select —</option>
+                                                        <?php foreach ($all_locations as $l): ?>
+                                                            <option value="<?php echo $l->id; ?>"
+                                                                <?php selected($v->location_id, $l->id); ?>>
+                                                                <?php echo esc_html($l->location_name); ?>
+                                                            </option>
+                                                        <?php endforeach; ?>
+                                                    </select>
+                                                    <label class="smm-venue-primary">
+                                                        <input type="radio" name="smm_venue_primary"
+                                                               value="<?php echo $idx; ?>"
+                                                               <?php checked($v->is_primary, 1); ?>>
+                                                        Primary
+                                                    </label>
+                                                    <button type="button" class="button-link smm-venue-remove">Remove</button>
+                                                </div>
+                                            <?php
+                                            $idx++;
+                                            endforeach;
+                                        endif; ?>
+                                    </div>
+
+                                    <p>
+                                        <button type="button" class="button" id="smm-add-venue">+ Add venue</button>
+                                    </p>
+                                    <p class="description">
+                                        The primary venue auto-fills on the match form when this team is home.
+                                        Games can still be played anywhere — all locations remain selectable.
+                                    </p>
+                                </td>
+                            </tr>
                         </table>
 
                         <?php submit_button($edit_team ? 'Update Team' : 'Add Team', 'primary',
@@ -1936,5 +2008,27 @@ class SMM_Admin {
             </form>
         </div>
         <?php
+    }
+
+    /**
+     * Read $_POST['venue'] rows into a normalized array.
+     * Each row: location_id, is_primary.
+     */
+    private function parse_venue_rows() {
+        if (empty($_POST['venue']) || !is_array($_POST['venue'])) {
+            return array();
+        }
+        $primary_idx = isset($_POST['smm_venue_primary']) ? intval($_POST['smm_venue_primary']) : -1;
+
+        $rows = array();
+        foreach ($_POST['venue'] as $idx => $row) {
+            $loc_id = intval($row['location_id'] ?? 0);
+            if (!$loc_id) continue;
+            $rows[] = array(
+                'location_id' => $loc_id,
+                'is_primary'  => (intval($idx) === $primary_idx),
+            );
+        }
+        return $rows;
     }
 }
