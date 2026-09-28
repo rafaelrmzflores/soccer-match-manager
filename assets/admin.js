@@ -195,47 +195,28 @@ jQuery(function ($) {
     );
 
     /* ============================================================
-       COMPETITION FORM — show/hide fields based on periods + live total
-       ============================================================ */
+    COMPETITION FORM — live computed duration
+    ============================================================ */
 
     if ($('#smm-competition-form').length) {
-        function updateFormatFields() {
-            const periods = parseInt($('#periods').val(), 10) || 2;
-            const isHalves = (periods === 2);
-            const isQuarters = (periods === 4);
-
-            $('.smm-field-halves').toggle(isHalves);
-            $('.smm-field-quarters').toggle(isQuarters);
-        }
-
         function computeDuration() {
-            const periods    = parseInt($('#periods').val(), 10) || 2;
-            const periodMin  = parseInt($('#period_minutes').val(), 10) || 0;
-            const halftime   = parseInt($('#halftime_minutes').val(), 10) || 0;
-            const waterBreak = parseInt($('#water_break_minutes').val(), 10) || 0;
-            const breakMin   = parseInt($('#break_minutes').val(), 10) || 0;
+            const periods   = parseInt($('#periods').val(), 10) || 2;
+            const periodMin = parseInt($('#period_minutes').val(), 10) || 0;
+            const halftime  = parseInt($('#halftime_minutes').val(), 10) || 0;
+            const breakMin  = parseInt($('#break_minutes').val(), 10) || 0;
 
-            let total;
-            if (periods === 2) {
-                total = (2 * periodMin) + halftime + (2 * waterBreak);
-            } else {
-                const shortBreaks = Math.max(0, periods - 2);
-                total = (periods * periodMin) + (shortBreaks * breakMin) + halftime;
-            }
-            return total;
+            return (periods * periodMin) + halftime + (periods * breakMin);
         }
 
         function refreshComputed() {
-            const total = computeDuration();
-            $('#smm-computed-duration').text(total + ' minutes');
+            $('#smm-computed-duration').text(computeDuration() + ' minutes');
         }
 
-        $(document).on('change input', '#periods, #period_minutes, #halftime_minutes, #water_break_minutes, #break_minutes', function () {
-            updateFormatFields();
-            refreshComputed();
-        });
+        $(document).on('change input',
+            '#periods, #period_minutes, #halftime_minutes, #break_minutes',
+            refreshComputed
+        );
 
-        updateFormatFields();
         refreshComputed();
     }
 

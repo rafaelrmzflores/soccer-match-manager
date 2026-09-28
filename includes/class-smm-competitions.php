@@ -140,22 +140,30 @@ class SMM_Competitions {
         return self::compute_duration_from_row($c);
     }
 
+    /**
+     * Compute total match duration from a competition's period config.
+     *
+     * Formula:
+     *   total = (periods × period_minutes) + halftime + (periods × break_minutes)
+     *
+     * Where:
+     *   - periods × period_minutes = actual playing time
+     *   - halftime = the long break at the midpoint
+     *   - periods × break_minutes = short breaks added within each period
+     *     (water breaks in halves; between-quarter breaks in quarters)
+     *
+     * Returns null for missing competition; 0 for competitions with no
+     * config set (shouldn't happen after migration).
+     */
     public static function compute_duration_from_row($c) {
         if (!$c) return null;
+
         $periods    = max(1, intval($c->periods ?? 2));
         $period_min = max(1, intval($c->period_minutes ?? 45));
         $break_min  = max(0, intval($c->break_minutes ?? 0));
         $half_min   = max(0, intval($c->halftime_minutes ?? 0));
-        $water_min  = max(0, intval($c->water_break_minutes ?? 0));
 
-        if ($periods === 2) {
-            // Halves: 1 halftime + 2 possible water breaks
-            return ($periods * $period_min) + $half_min + ($periods * $water_min);
-        }
-
-        // Quarters or general: (N - 2) short breaks + 1 halftime
-        $short_breaks = max(0, $periods - 2);
-        return ($periods * $period_min) + ($short_breaks * $break_min) + $half_min;
+        return ($periods * $period_min) + $half_min + ($periods * $break_min);
     }
 
     public static function sanitize_color($color) {

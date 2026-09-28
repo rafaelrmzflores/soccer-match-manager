@@ -209,9 +209,9 @@ class SMM_Admin {
                 intval($_POST['league_id'] ?? 0),
                 intval($_POST['periods'] ?? 2),
                 intval($_POST['period_minutes'] ?? 45),
-                intval($_POST['break_minutes'] ?? 5),
-                intval($_POST['halftime_minutes'] ?? 15),
-                intval($_POST['water_break_minutes'] ?? 0)
+                intval($_POST['break_minutes'] ?? 0),
+                intval($_POST['halftime_minutes'] ?? 10),
+                0
             );
             wp_redirect(admin_url('admin.php?page=smm-competitions&message=competition_added'));
             exit;
@@ -228,9 +228,9 @@ class SMM_Admin {
                 intval($_POST['league_id'] ?? 0),
                 intval($_POST['periods'] ?? 2),
                 intval($_POST['period_minutes'] ?? 45),
-                intval($_POST['break_minutes'] ?? 5),
-                intval($_POST['halftime_minutes'] ?? 15),
-                intval($_POST['water_break_minutes'] ?? 0)
+                intval($_POST['break_minutes'] ?? 0),
+                intval($_POST['halftime_minutes'] ?? 10),
+                0
             );
             wp_redirect(admin_url('admin.php?page=smm-competitions&message=competition_updated'));
             exit;
@@ -1285,7 +1285,7 @@ class SMM_Admin {
                                            value="<?php echo $edit ? esc_attr($edit->color) : '#0d6efd'; ?>"></td>
                             </tr>
 
-                            <!-- Period configuration -->
+                                                        <!-- Period configuration -->
                             <tr>
                                 <th colspan="2" style="padding-bottom:0;">
                                     <hr>
@@ -1298,7 +1298,7 @@ class SMM_Admin {
                                     <select name="periods" id="periods">
                                         <?php
                                         $current_periods = $edit ? intval($edit->periods) : 2;
-                                        foreach (array(2 => 'Halves (2)', 4 => 'Quarters (4)', 1 => 'Single period', 3 => 'Thirds (3)') as $k => $v):
+                                        foreach (array(2 => 'Halves (2)', 4 => 'Quarters (4)') as $k => $v):
                                             ?>
                                             <option value="<?php echo $k; ?>"
                                                 <?php selected($current_periods, $k); ?>>
@@ -1306,52 +1306,35 @@ class SMM_Admin {
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <p class="description">
-                                        Halves enable a halftime and optional water breaks.
-                                        Quarters enable short breaks between periods plus halftime.
-                                    </p>
                                 </td>
                             </tr>
                             <tr>
-                                <th><label for="period_minutes">Length of each period (min)</label></th>
-                                <td><input type="number" name="period_minutes" id="period_minutes"
-                                           min="1" step="1"
-                                           value="<?php echo $edit ? intval($edit->period_minutes) : 45; ?>"></td>
+                                <th><label for="period_minutes">Length of period (min)</label></th>
+                                <td>
+                                    <input type="number" name="period_minutes" id="period_minutes"
+                                           min="1" step="1" class="small-text"
+                                           value="<?php echo $edit ? intval($edit->period_minutes) : 45; ?>">
+                                </td>
                             </tr>
-                            <tr class="smm-field-halves">
+                            <tr>
                                 <th><label for="halftime_minutes">Halftime (min)</label></th>
-                                <td><input type="number" name="halftime_minutes" id="halftime_minutes"
-                                           min="0" step="1"
-                                           value="<?php echo $edit ? intval($edit->halftime_minutes) : 15; ?>">
-                                    <p class="description">Break at the midpoint of the match.</p>
-                                </td>
-                            </tr>
-                            <tr class="smm-field-halves">
-                                <th><label for="water_break_minutes">Water break (min, each half)</label></th>
-                                <td><input type="number" name="water_break_minutes" id="water_break_minutes"
-                                           min="0" step="1"
-                                           value="<?php echo $edit ? intval($edit->water_break_minutes) : 0; ?>">
-                                    <p class="description">
-                                        Added mid-way through each half. Set to 0 if not used.
-                                    </p>
-                                </td>
-                            </tr>
-                            <tr class="smm-field-quarters">
-                                <th><label for="break_minutes">Break between periods (min)</label></th>
-                                <td><input type="number" name="break_minutes" id="break_minutes"
-                                           min="0" step="1"
-                                           value="<?php echo $edit ? intval($edit->break_minutes) : 5; ?>">
-                                    <p class="description">
-                                        Short breaks between quarters. Halftime applies at the midpoint.
-                                    </p>
-                                </td>
-                            </tr>
-                            <tr class="smm-field-quarters">
-                                <th><label for="halftime_minutes_q">Halftime (min)</label></th>
-                                <td><input type="number" name="halftime_minutes" id="halftime_minutes_q"
-                                           min="0" step="1"
+                                <td>
+                                    <input type="number" name="halftime_minutes" id="halftime_minutes"
+                                           min="0" step="1" class="small-text"
                                            value="<?php echo $edit ? intval($edit->halftime_minutes) : 10; ?>">
-                                    <p class="description">Longer break at the midpoint.</p>
+                                    <p class="description">The long break at the midpoint.</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="break_minutes">Extra break per period (min)</label></th>
+                                <td>
+                                    <input type="number" name="break_minutes" id="break_minutes"
+                                           min="0" step="1" class="small-text"
+                                           value="<?php echo $edit ? intval($edit->break_minutes) : 0; ?>">
+                                    <p class="description">
+                                        Optional. Water breaks in halves, or short breaks
+                                        between quarters. Set to 0 if not used.
+                                    </p>
                                 </td>
                             </tr>
 
@@ -1369,7 +1352,7 @@ class SMM_Admin {
                                         ?>
                                     </div>
                                     <p class="description">
-                                        Approximate total duration. Auto-applied to matches when this competition is selected.
+                                        Auto-applied to matches when this competition is selected.
                                     </p>
                                 </td>
                             </tr>

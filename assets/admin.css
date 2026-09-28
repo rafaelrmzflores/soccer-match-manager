@@ -450,3 +450,10 @@
     text-decoration: none;
 }
 .smm-conflict-panel__list a:hover { text-decoration: underline; }
+/* Tighten the Match Format section */
+#smm-competition-form .form-table tr th:has(+ td) {
+    /* no-op fallback for older browsers */
+}
+#smm-competition-form .small-text {
+    width: 90px;
+}
