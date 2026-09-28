@@ -821,21 +821,22 @@ class SMM_Admin {
         }
 
         // Determine initial league based on the match's competition
-        $initial_league_id = 0;
-        if ($match && $match->competition_id) {
-            $match_comp = SMM_Competitions::get($match->competition_id);
-            if ($match_comp) $initial_league_id = intval($match_comp->league_id);
-        }
+        // $initial_league_id = 0; // delete unused variable
+        // if ($match && $match->competition_id) {
+        //     $match_comp = SMM_Competitions::get($match->competition_id);
+        //     if ($match_comp) $initial_league_id = intval($match_comp->league_id);
+        // }
 
-        $leagues   = SMM_Leagues::get_all();
+        // $leagues   = SMM_Leagues::get_all(); // delete unused variable
         $locations = SMM_Locations::get_all();
         $statuses  = SMM_Helpers::statuses();
 
         // Initial dropdown data (server-rendered, then JS filters on change)
-        $teams_for_league = $initial_league_id
-            ? SMM_Teams::get_by_league($initial_league_id)
-            : SMM_Teams::get_all();
-        $comps_for_league = SMM_Competitions::get_for_league($initial_league_id);
+        // $teams_for_league = $initial_league_id
+        //     ? SMM_Teams::get_by_league($initial_league_id)
+        //     : SMM_Teams::get_all();
+        $teams_for_league = SMM_Teams::get_all();
+        // $comps_for_league = SMM_Competitions::get_for_league($initial_league_id); // delete unused variable
 
         $my_team_ids = array_keys(SMM_Teams::get_teams_with_active_players());
 
@@ -891,45 +892,30 @@ class SMM_Admin {
                     </tr>
 
                     <tr>
-                        <th><label for="match_league_id">League</label></th>
-                        <td>
-                            <select name="match_league_id" id="match_league_id">
-                                <option value="0">— All leagues (show all teams) —</option>
-                                <?php foreach ($leagues as $l): ?>
-                                    <option value="<?php echo $l->id; ?>"
-                                        <?php selected($initial_league_id, $l->id); ?>>
-                                        <?php echo esc_html($l->league_name); ?>
-                                        <?php if ($l->season) echo ' (' . esc_html($l->season) . ')'; ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <p class="description">
-                                Filters the team and competition dropdowns below.
-                                <a href="<?php echo admin_url('admin.php?page=smm-leagues'); ?>">Manage leagues →</a>
-                            </p>
-                        </td>
-                    </tr>
-
-                    <tr>
                         <th><label for="competition_id">Competition</label></th>
                         <td>
                             <select name="competition_id" id="competition_id">
-                                <option value="0" data-duration="">— None —</option>
-                                <?php foreach ($comps_for_league as $c):
-                                    $computed = SMM_Competitions::compute_duration_from_row($c);
-                                    ?>
-                                    <option value="<?php echo $c->id; ?>"
-                                            data-duration="<?php echo intval($computed); ?>"
-                                            data-league="<?php echo intval($c->league_id); ?>"
-                                        <?php selected($match ? $match->competition_id : 0, $c->id); ?>>
-                                        <?php echo esc_html($c->competition_name); ?>
-                                        <?php if ($c->season) echo ' (' . esc_html($c->season) . ')'; ?>
-                                        <?php if (!$c->league_id) echo ' — cross-league'; ?>
-                                    </option>
+                                <option value="0" data-duration="" data-league="0">— None —</option>
+                                <?php
+                                $grouped_comps = SMM_Competitions::get_grouped_by_league();
+                                $current_comp = $match ? intval($match->competition_id) : 0;
+                                foreach ($grouped_comps as $group_label => $items): ?>
+                                    <optgroup label="<?php echo esc_attr($group_label); ?>">
+                                        <?php foreach ($items as $item): ?>
+                                            <option value="<?php echo intval($item['id']); ?>"
+                                                    data-duration="<?php echo intval($item['computed_duration']); ?>"
+                                                    data-league="<?php echo intval($item['league_id']); ?>"
+                                                <?php selected($current_comp, $item['id']); ?>>
+                                                <?php echo esc_html($item['label']); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </optgroup>
                                 <?php endforeach; ?>
                             </select>
                             <p class="description">
-                                Selecting a competition auto-fills the duration below.
+                                Picking a competition filters the team dropdowns to its league
+                                and auto-fills the duration below. Leave blank for a friendly —
+                                all active teams appear.
                                 <a href="<?php echo admin_url('admin.php?page=smm-competitions'); ?>">Manage competitions →</a>
                             </p>
                         </td>

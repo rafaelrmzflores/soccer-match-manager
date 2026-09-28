@@ -48,6 +48,61 @@ class SMM_Competitions {
         ));
     }
 
+    /**
+     * Returns competitions grouped by league, ordered for display:
+     *   1. Leagues sorted alphabetically
+     *   2. Competitions under each league, sorted alphabetically
+     *   3. A trailing "Cross-league" group for competitions with no league
+     *
+     * Each entry: ['id' => int, 'label' => string, 'league_id' => int, 'computed_duration' => int]
+     * Structure: [
+     *   'Fall 2025 U12 South' => [
+     *      ['id' => 1, 'label' => 'Regular Season', 'league_id' => 3, 'computed_duration' => 75],
+     *      ...
+     *   ],
+     *   'Cross-league' => [ ... ],
+     * ]
+     */
+    public static function get_grouped_by_league() {
+        $comps = self::get_all();
+        $grouped = array();
+
+        foreach ($comps as $c) {
+            $key = $c->league_id ? SMM_Leagues::get_label($c->league_id) : 'Cross-league';
+            if (!$key) $key = 'Cross-league';
+
+            $label = $c->competition_name;
+            if ($c->season && !$c->league_id) {
+                // For cross-league comps, include season for disambiguation
+                $label .= ' (' . $c->season . ')';
+            }
+
+            $grouped[$key][] = array(
+                'id'                => intval($c->id),
+                'label'             => $label,
+                'league_id'         => intval($c->league_id),
+                'computed_duration' => self::compute_duration_from_row($c),
+            );
+        }
+
+        // Sort groups: real leagues alphabetically, cross-league last
+        uksort($grouped, function($a, $b) {
+            if ($a === 'Cross-league') return 1;
+            if ($b === 'Cross-league') return -1;
+            return strcasecmp($a, $b);
+        });
+
+        // Sort inside each group alphabetically by label
+        foreach ($grouped as &$items) {
+            usort($items, function($a, $b) {
+                return strcasecmp($a['label'], $b['label']);
+            });
+        }
+        unset($items);
+
+        return $grouped;
+    }
+
     public static function add($name, $short_label = '', $season = '', $age_group = '',
                                $color = '#0d6efd', $notes = '', $league_id = 0,
                                $periods = 2, $period_minutes = 45, $break_minutes = 5,
