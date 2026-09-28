@@ -6,6 +6,7 @@ class SMM_Admin {
         add_action('admin_enqueue_scripts', array($this, 'assets'));
         add_action('admin_init', array($this, 'handle_forms'));
         add_action('admin_notices', array($this, 'conflict_banner'));
+        add_action('wp_ajax_smm_get_league_data', array($this, 'ajax_get_league_data'));
         add_action('wp_ajax_smm_get_team_players', array($this, 'ajax_get_team_players'));
     }
 
@@ -18,6 +19,9 @@ class SMM_Admin {
 
         add_submenu_page('smm-matches', 'Add Match', 'Add Match',
             'manage_options', 'smm-add-match', array($this, 'add_match_page'));
+
+        add_submenu_page('smm-matches', 'Leagues', 'Leagues',
+            'manage_options', 'smm-leagues', array($this, 'leagues_page'));
 
         add_submenu_page('smm-matches', 'Competitions', 'Competitions',
             'manage_options', 'smm-competitions', array($this, 'competitions_page'));
@@ -51,6 +55,48 @@ class SMM_Admin {
         ));
     }
 
+    /* ============================================================
+       AJAX
+       ============================================================ */
+
+    /**
+     * Returns teams and competitions for a given league, plus the
+     * set of "my team" IDs (teams with active players).
+     */
+    public function ajax_get_league_data() {
+        check_ajax_referer('smm_ajax', 'nonce');
+        $league_id = intval($_POST['league_id'] ?? 0);
+
+        $teams = array();
+        foreach (SMM_Teams::get_by_league($league_id) as $t) {
+            $teams[] = array(
+                'id'       => intval($t->id),
+                'name'     => $t->team_name,
+                'league_id'=> intval($t->league_id),
+            );
+        }
+
+        $comps = array();
+        foreach (SMM_Competitions::get_for_league($league_id) as $c) {
+            $comps[] = array(
+                'id'                => intval($c->id),
+                'name'              => $c->competition_name,
+                'short_label'       => $c->short_label,
+                'season'            => $c->season,
+                'league_id'         => intval($c->league_id),
+                'computed_duration' => SMM_Competitions::compute_duration_from_row($c),
+            );
+        }
+
+        $my_team_ids = array_keys(SMM_Teams::get_teams_with_active_players());
+
+        wp_send_json_success(array(
+            'teams'        => $teams,
+            'competitions' => $comps,
+            'my_team_ids'  => array_map('intval', $my_team_ids),
+        ));
+    }
+
     public function ajax_get_team_players() {
         check_ajax_referer('smm_ajax', 'nonce');
         $team_id = intval($_POST['team_id'] ?? 0);
@@ -63,6 +109,10 @@ class SMM_Admin {
         }
         wp_send_json_success(array('players' => $out));
     }
+
+    /* ============================================================
+       ADMIN NOTICES
+       ============================================================ */
 
     public function conflict_banner() {
         if (!current_user_can('manage_options')) return;
@@ -83,6 +133,10 @@ class SMM_Admin {
             esc_url($url)
         );
     }
+
+    /* ============================================================
+       FORM HANDLING
+       ============================================================ */
 
     public function handle_forms() {
         /* ---- SAVE MATCH ---- */
@@ -111,6 +165,38 @@ class SMM_Admin {
             exit;
         }
 
+        /* ---- LEAGUES ---- */
+        if (isset($_POST['smm_add_league']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_add_league')) {
+            SMM_Leagues::add(
+                $_POST['league_name'] ?? '',
+                $_POST['season'] ?? '',
+                $_POST['age_group'] ?? '',
+                $_POST['color'] ?? '#0d6efd',
+                $_POST['notes'] ?? ''
+            );
+            wp_redirect(admin_url('admin.php?page=smm-leagues&message=league_added'));
+            exit;
+        }
+        if (isset($_POST['smm_update_league']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_update_league')) {
+            SMM_Leagues::update(
+                intval($_POST['league_id']),
+                $_POST['league_name'] ?? '',
+                $_POST['season'] ?? '',
+                $_POST['age_group'] ?? '',
+                $_POST['color'] ?? '#0d6efd',
+                $_POST['notes'] ?? ''
+            );
+            wp_redirect(admin_url('admin.php?page=smm-leagues&message=league_updated'));
+            exit;
+        }
+        if (isset($_GET['action'], $_GET['id']) && $_GET['action'] === 'delete_league') {
+            if (wp_verify_nonce($_GET['_wpnonce'], 'smm_del_league_' . $_GET['id'])) {
+                SMM_Leagues::delete(intval($_GET['id']));
+                wp_redirect(admin_url('admin.php?page=smm-leagues&message=league_deleted'));
+                exit;
+            }
+        }
+
         /* ---- COMPETITIONS ---- */
         if (isset($_POST['smm_add_competition']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_add_competition')) {
             SMM_Competitions::add(
@@ -119,7 +205,13 @@ class SMM_Admin {
                 $_POST['season'] ?? '',
                 $_POST['age_group'] ?? '',
                 $_POST['color'] ?? '#0d6efd',
-                $_POST['notes'] ?? ''
+                $_POST['notes'] ?? '',
+                intval($_POST['league_id'] ?? 0),
+                intval($_POST['periods'] ?? 2),
+                intval($_POST['period_minutes'] ?? 45),
+                intval($_POST['break_minutes'] ?? 5),
+                intval($_POST['halftime_minutes'] ?? 15),
+                intval($_POST['water_break_minutes'] ?? 0)
             );
             wp_redirect(admin_url('admin.php?page=smm-competitions&message=competition_added'));
             exit;
@@ -132,7 +224,13 @@ class SMM_Admin {
                 $_POST['season'] ?? '',
                 $_POST['age_group'] ?? '',
                 $_POST['color'] ?? '#0d6efd',
-                $_POST['notes'] ?? ''
+                $_POST['notes'] ?? '',
+                intval($_POST['league_id'] ?? 0),
+                intval($_POST['periods'] ?? 2),
+                intval($_POST['period_minutes'] ?? 45),
+                intval($_POST['break_minutes'] ?? 5),
+                intval($_POST['halftime_minutes'] ?? 15),
+                intval($_POST['water_break_minutes'] ?? 0)
             );
             wp_redirect(admin_url('admin.php?page=smm-competitions&message=competition_updated'));
             exit;
@@ -147,14 +245,23 @@ class SMM_Admin {
 
         /* ---- TEAMS ---- */
         if (isset($_POST['smm_add_team']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_add_team')) {
-            SMM_Teams::add($_POST['team_name'] ?? '', intval($_POST['team_logo_id'] ?? 0),
-                $_POST['default_duration'] ?? null);
+            SMM_Teams::add(
+                $_POST['team_name'] ?? '',
+                intval($_POST['team_logo_id'] ?? 0),
+                $_POST['default_duration'] ?? null,
+                intval($_POST['team_league_id'] ?? 0)
+            );
             wp_redirect(admin_url('admin.php?page=smm-teams&message=team_added'));
             exit;
         }
         if (isset($_POST['smm_update_team']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_update_team')) {
-            SMM_Teams::update(intval($_POST['team_id']), $_POST['team_name'] ?? '',
-                intval($_POST['team_logo_id'] ?? 0), $_POST['default_duration'] ?? null);
+            SMM_Teams::update(
+                intval($_POST['team_id']),
+                $_POST['team_name'] ?? '',
+                intval($_POST['team_logo_id'] ?? 0),
+                $_POST['default_duration'] ?? null,
+                intval($_POST['team_league_id'] ?? 0)
+            );
             wp_redirect(admin_url('admin.php?page=smm-teams&message=team_updated'));
             exit;
         }
@@ -166,7 +273,7 @@ class SMM_Admin {
             }
         }
 
-        /* ---- PLAYERS ---- */
+        /* ---- PLAYERS (unchanged) ---- */
         if (isset($_POST['smm_add_player']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_add_player')) {
             SMM_Players::add($_POST['player_name'] ?? '', $_POST['player_email'] ?? '',
                 intval($_POST['player_team_id'] ?? 0), $_POST['availability'] ?? 'available');
@@ -193,7 +300,7 @@ class SMM_Admin {
             }
         }
 
-        /* ---- LOCATIONS ---- */
+        /* ---- LOCATIONS (unchanged) ---- */
         if (isset($_POST['smm_add_location']) && wp_verify_nonce($_POST['smm_nonce'], 'smm_add_location')) {
             SMM_Locations::add(
                 $_POST['location_name'] ?? '', $_POST['location_address'] ?? '',
@@ -219,10 +326,10 @@ class SMM_Admin {
             }
         }
 
-        /* ---- CSV IMPORT (all entity types) ---- */
+        /* ---- CSV IMPORT ---- */
         if (!empty($_POST['smm_import_entity']) && !empty($_FILES['csv_file']['tmp_name'])) {
             $entity = sanitize_key($_POST['smm_import_entity']);
-            $allowed = array('locations','competitions','teams','players','matches');
+            $allowed = array('leagues','locations','competitions','teams','players','matches');
 
             if (in_array($entity, $allowed, true)
                 && wp_verify_nonce($_POST['smm_nonce'], 'smm_import_' . $entity)) {
@@ -231,22 +338,13 @@ class SMM_Admin {
                 $file = $_FILES['csv_file']['tmp_name'];
 
                 switch ($entity) {
-                    case 'locations':
-                        $res = SMM_CSV_Entities::import_locations($file, $update);
-                        break;
-                    case 'competitions':
-                        $res = SMM_CSV_Entities::import_competitions($file, $update);
-                        break;
-                    case 'teams':
-                        $res = SMM_CSV_Entities::import_teams($file, $update);
-                        break;
-                    case 'players':
-                        $res = SMM_CSV_Entities::import_players($file, $update);
-                        break;
+                    case 'leagues':      $res = SMM_CSV_Entities::import_leagues($file, $update); break;
+                    case 'locations':    $res = SMM_CSV_Entities::import_locations($file, $update); break;
+                    case 'competitions': $res = SMM_CSV_Entities::import_competitions($file, $update); break;
+                    case 'teams':        $res = SMM_CSV_Entities::import_teams($file, $update); break;
+                    case 'players':      $res = SMM_CSV_Entities::import_players($file, $update); break;
                     case 'matches':
-                    default:
-                        $res = SMM_CSV::import_matches($file);
-                        break;
+                    default:             $res = SMM_CSV::import_matches($file); break;
                 }
                 set_transient('smm_import_result_' . get_current_user_id(), $res, 60);
             }
@@ -254,10 +352,10 @@ class SMM_Admin {
             exit;
         }
 
-        /* ---- CSV EXPORT (all entity types) ---- */
+        /* ---- CSV EXPORT ---- */
         if (isset($_GET['smm_export'])) {
             $entity = sanitize_key($_GET['smm_export']);
-            $allowed = array('locations','competitions','teams','players','matches');
+            $allowed = array('leagues','locations','competitions','teams','players','matches');
             if (in_array($entity, $allowed, true)
                 && wp_verify_nonce($_GET['_wpnonce'], 'smm_export_' . $entity)) {
 
@@ -267,12 +365,13 @@ class SMM_Admin {
                     . $entity . '-' . SMM_Helpers::today_ymd() . '.csv');
 
                 switch ($entity) {
-                    case 'locations':    echo SMM_CSV_Entities::export_locations();    break;
+                    case 'leagues':      echo SMM_CSV_Entities::export_leagues(); break;
+                    case 'locations':    echo SMM_CSV_Entities::export_locations(); break;
                     case 'competitions': echo SMM_CSV_Entities::export_competitions(); break;
-                    case 'teams':        echo SMM_CSV_Entities::export_teams();        break;
-                    case 'players':      echo SMM_CSV_Entities::export_players();      break;
+                    case 'teams':        echo SMM_CSV_Entities::export_teams(); break;
+                    case 'players':      echo SMM_CSV_Entities::export_players(); break;
                     case 'matches':
-                    default:             echo SMM_CSV::export_matches();               break;
+                    default:             echo SMM_CSV::export_matches(); break;
                 }
                 exit;
             }
@@ -292,6 +391,16 @@ class SMM_Admin {
         $loc_id  = intval($_POST['location_id'] ?? 0);
         $comp_id = intval($_POST['competition_id'] ?? 0);
 
+        // Time: may be null if "TBD" was checked
+        $time_tbd = !empty($_POST['time_tbd']);
+        $match_time = null;
+        if (!$time_tbd) {
+            $raw_time = trim($_POST['match_time'] ?? '');
+            if ($raw_time !== '') {
+                $match_time = sanitize_text_field($raw_time);
+            }
+        }
+
         $duration = !empty($_POST['match_duration']) ? intval($_POST['match_duration']) : null;
         if ($duration !== null && $duration <= 0) $duration = null;
 
@@ -300,7 +409,7 @@ class SMM_Admin {
 
         $data = array(
             'match_date'     => sanitize_text_field($_POST['match_date']),
-            'match_time'     => sanitize_text_field($_POST['match_time']),
+            'match_time'     => $match_time,
             'match_duration' => $duration,
             'home_team_id'   => $home_id,
             'away_team_id'   => $away_id,
@@ -368,6 +477,10 @@ class SMM_Admin {
         return array_unique($ids);
     }
 
+    /* ============================================================
+       SORT HELPERS
+       ============================================================ */
+
     private function sortable_match_columns() {
         return array(
             'match_date'     => array('sql' => 'match_date',     'label' => 'Date'),
@@ -384,9 +497,7 @@ class SMM_Admin {
 
     private function sort_link($key, $label, $current_by, $current_order) {
         $cols = $this->sortable_match_columns();
-        if (!isset($cols[$key])) {
-            return esc_html($label);
-        }
+        if (!isset($cols[$key])) return esc_html($label);
         $sql_col = $cols[$key]['sql'];
 
         $is_current = ($current_by === $sql_col)
@@ -418,6 +529,10 @@ class SMM_Admin {
         );
     }
 
+    /* ============================================================
+       PAGE: MATCHES LIST
+       ============================================================ */
+
     public function matches_page() {
         $f_search      = sanitize_text_field($_GET['s'] ?? '');
         $f_date_from   = sanitize_text_field($_GET['date_from'] ?? '');
@@ -429,20 +544,14 @@ class SMM_Admin {
         $f_conflicts   = !empty($_GET['filter_conflicts']);
         $show_past     = !empty($_GET['show_past']);
 
-        // Sort state
         $sortable = $this->sortable_match_columns();
         $allowed_sql_cols = array_map(function($c) { return $c['sql']; }, $sortable);
 
         $orderby = sanitize_key($_GET['orderby'] ?? 'match_date');
-        if (!in_array($orderby, $allowed_sql_cols, true)) {
-            $orderby = 'match_date';
-        }
+        if (!in_array($orderby, $allowed_sql_cols, true)) $orderby = 'match_date';
         $order = (strtoupper($_GET['order'] ?? '') === 'DESC') ? 'DESC' : 'ASC';
-        if (!isset($_GET['order'])) {
-            $order = $show_past ? 'DESC' : 'ASC';
-        }
+        if (!isset($_GET['order'])) $order = $show_past ? 'DESC' : 'ASC';
 
-        // Add secondary chronological sort when not sorting by date
         $effective_orderby = $orderby;
         if ($orderby !== 'match_date' && $orderby !== 'match_time') {
             $effective_orderby = $orderby . ', match_date, match_time';
@@ -488,10 +597,9 @@ class SMM_Admin {
                 <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=smm-matches&smm_export=matches'), 'smm_export_matches'); ?>"
                    class="page-title-action">Export CSV</a>
             </h1>
-                        <?php
-            // ---- Conflicts by player panel ----
-            $conflict_checker = new SMM_Conflict_Checker();
-            $by_player = $conflict_checker->get_conflicts_by_player();
+
+            <?php
+            $by_player = $checker->get_conflicts_by_player();
             if (!empty($by_player)):
                 $total = 0;
                 foreach ($by_player as $g) $total += $g['count'];
@@ -511,9 +619,7 @@ class SMM_Admin {
                             <div class="smm-conflict-panel__group">
                                 <div class="smm-conflict-panel__name">
                                     <?php echo esc_html($name); ?>
-                                    <span class="smm-conflict-panel__count">
-                                        <?php echo intval($g['count']); ?>
-                                    </span>
+                                    <span class="smm-conflict-panel__count"><?php echo intval($g['count']); ?></span>
                                 </div>
                                 <ul class="smm-conflict-panel__list">
                                     <?php foreach ($g['conflicts'] as $c):
@@ -525,10 +631,7 @@ class SMM_Admin {
                                             <a href="<?php echo admin_url('admin.php?page=smm-add-match&id=' . $cm->id); ?>">
                                                 <?php echo esc_html(SMM_Helpers::fmt_date($cm->match_date)); ?>
                                                 <?php echo esc_html(SMM_Helpers::fmt_time($cm->match_time)); ?>
-                                                —
-                                                <?php echo esc_html($chome); ?>
-                                                vs
-                                                <?php echo esc_html($caway); ?>
+                                                — <?php echo esc_html($chome); ?> vs <?php echo esc_html($caway); ?>
                                             </a>
                                         </li>
                                     <?php endforeach; ?>
@@ -538,6 +641,7 @@ class SMM_Admin {
                     </div>
                 </details>
             <?php endif; ?>
+
             <?php if (isset($_GET['message'])): ?>
                 <div class="notice notice-success is-dismissible"><p><?php
                     $m = array(
@@ -645,7 +749,13 @@ class SMM_Admin {
                         <tr class="<?php echo !empty($conflicts) ? 'smm-has-conflict' : ''; ?>">
                             <td><input type="checkbox" name="match_ids[]" value="<?php echo $m->id; ?>"></td>
                             <td><?php echo esc_html(SMM_Helpers::fmt_date($m->match_date)); ?></td>
-                            <td><?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?></td>
+                            <td>
+                                <?php if (empty($m->match_time)): ?>
+                                    <span class="smm-tbd">TBD</span>
+                                <?php else: ?>
+                                    <?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?>
+                                <?php endif; ?>
+                            </td>
                             <td><?php echo $m->match_duration ? intval($m->match_duration) . ' min' : '—'; ?></td>
                             <td>
                                 <?php if ($m->competition_id): ?>
@@ -667,12 +777,17 @@ class SMM_Admin {
                             <td><?php echo SMM_Helpers::status_badge($m->status); ?></td>
                             <td>
                                 <?php if (!empty($conflicts)):
-                                    $conflict_msgs = array_map(function($c) { return $c['message']; }, $conflicts);
+                                    $msgs = array_map(function($c) {
+                                        return is_array($c) ? ($c['message'] ?? '') : (string) $c;
+                                    }, $conflicts);
                                     ?>
                                     <span class="smm-conflict-warning"
-                                        title="<?php echo esc_attr(implode("\n", $conflict_msgs)); ?>">
+                                          title="<?php echo esc_attr(implode("\n", $msgs)); ?>">
                                         ⚠️ <?php echo count($conflicts); ?>
                                     </span>
+                                <?php elseif (empty($m->match_time)): ?>
+                                    <span class="smm-no-conflict smm-no-conflict--muted"
+                                          title="No time set — not checked for conflicts">—</span>
                                 <?php else: ?>
                                     <span class="smm-no-conflict">✓</span>
                                 <?php endif; ?>
@@ -691,6 +806,10 @@ class SMM_Admin {
         <?php
     }
 
+    /* ============================================================
+       PAGE: ADD / EDIT MATCH
+       ============================================================ */
+
     public function add_match_page() {
         $match = null;
         $selected = array();
@@ -701,22 +820,47 @@ class SMM_Admin {
             }
         }
 
-        $teams        = SMM_Teams::get_all();
-        $players      = SMM_Players::get_all(true);
-        $locations    = SMM_Locations::get_all();
-        $competitions = SMM_Competitions::get_all();
-        $statuses     = SMM_Helpers::statuses();
+        // Determine initial league based on the match's competition
+        $initial_league_id = 0;
+        if ($match && $match->competition_id) {
+            $match_comp = SMM_Competitions::get($match->competition_id);
+            if ($match_comp) $initial_league_id = intval($match_comp->league_id);
+        }
+
+        $leagues   = SMM_Leagues::get_all();
+        $locations = SMM_Locations::get_all();
+        $statuses  = SMM_Helpers::statuses();
+
+        // Initial dropdown data (server-rendered, then JS filters on change)
+        $teams_for_league = $initial_league_id
+            ? SMM_Teams::get_by_league($initial_league_id)
+            : SMM_Teams::get_all();
+        $comps_for_league = SMM_Competitions::get_for_league($initial_league_id);
+
+        $my_team_ids = array_keys(SMM_Teams::get_teams_with_active_players());
+
+        // Sort: my teams first, then alphabetical
+        usort($teams_for_league, function($a, $b) use ($my_team_ids) {
+            $a_mine = in_array(intval($a->id), $my_team_ids, true);
+            $b_mine = in_array(intval($b->id), $my_team_ids, true);
+            if ($a_mine !== $b_mine) return $a_mine ? -1 : 1;
+            return strcasecmp($a->team_name, $b->team_name);
+        });
+
+        $players = SMM_Players::get_all(true);
         ?>
         <div class="wrap">
             <h1><?php echo $match ? 'Edit Match' : 'Add New Match'; ?></h1>
 
-            <?php if (empty($teams)): ?>
-                <div class="notice notice-warning"><p>
-                    Add teams first. <a href="<?php echo admin_url('admin.php?page=smm-teams'); ?>">Manage Teams →</a>
+            <?php if (empty($leagues)): ?>
+                <div class="notice notice-info"><p>
+                    Tip: create a <a href="<?php echo admin_url('admin.php?page=smm-leagues'); ?>">League</a>
+                    to organize your teams, then assign teams to it.
                 </p></div>
             <?php endif; ?>
 
-            <form method="post" id="smm-match-form">
+            <form method="post" id="smm-match-form"
+                  data-my-team-ids="<?php echo esc_attr(implode(',', $my_team_ids)); ?>">
                 <?php wp_nonce_field('smm_save_match', 'smm_nonce'); ?>
                 <?php if ($match): ?>
                     <input type="hidden" name="match_id" value="<?php echo $match->id; ?>">
@@ -728,50 +872,89 @@ class SMM_Admin {
                         <td><input type="date" name="match_date" id="match_date" required
                                    value="<?php echo $match ? esc_attr($match->match_date) : ''; ?>"></td>
                     </tr>
+
                     <tr>
                         <th><label for="match_time">Time</label></th>
                         <td>
-                            <input type="time" name="match_time" id="match_time" required
-                                   value="<?php echo $match ? esc_attr(substr($match->match_time, 0, 5)) : ''; ?>">
-                            <p class="description">Times use your site's timezone (<?php echo esc_html(wp_timezone_string()); ?>).</p>
+                            <input type="time" name="match_time" id="match_time"
+                                   value="<?php echo ($match && $match->match_time) ? esc_attr(substr($match->match_time, 0, 5)) : ''; ?>">
+                            <label style="margin-left:12px;">
+                                <input type="checkbox" name="time_tbd" id="time_tbd" value="1"
+                                    <?php checked($match && empty($match->match_time)); ?>>
+                                Time TBD
+                            </label>
+                            <p class="description">
+                                Times use your site's timezone (<?php echo esc_html(wp_timezone_string()); ?>).
+                                Matches without a time are not checked for conflicts.
+                            </p>
                         </td>
                     </tr>
+
                     <tr>
-                        <th><label for="match_duration">Duration (minutes)</label></th>
+                        <th><label for="match_league_id">League</label></th>
                         <td>
-                            <input type="number" name="match_duration" id="match_duration"
-                                   min="0" step="5" placeholder="e.g. 90"
-                                   value="<?php echo ($match && $match->match_duration) ? esc_attr($match->match_duration) : ''; ?>">
-                            <p class="description">Optional. Used for time-overlap detection. If empty, a 2-hour window is assumed.</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th><label for="competition_id">Competition</label></th>
-                        <td>
-                            <select name="competition_id" id="competition_id">
-                                <option value="0">— None —</option>
-                                <?php foreach ($competitions as $c): ?>
-                                    <option value="<?php echo $c->id; ?>"
-                                        <?php selected($match ? $match->competition_id : 0, $c->id); ?>>
-                                        <?php echo esc_html($c->competition_name); ?>
-                                        <?php if ($c->season) echo ' (' . esc_html($c->season) . ')'; ?>
-                                        <?php if ($c->age_group) echo ' — ' . esc_html($c->age_group); ?>
+                            <select name="match_league_id" id="match_league_id">
+                                <option value="0">— All leagues (show all teams) —</option>
+                                <?php foreach ($leagues as $l): ?>
+                                    <option value="<?php echo $l->id; ?>"
+                                        <?php selected($initial_league_id, $l->id); ?>>
+                                        <?php echo esc_html($l->league_name); ?>
+                                        <?php if ($l->season) echo ' (' . esc_html($l->season) . ')'; ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                             <p class="description">
-                                <a href="<?php echo admin_url('admin.php?page=smm-competitions'); ?>">
-                                    Manage competitions →
-                                </a>
+                                Filters the team and competition dropdowns below.
+                                <a href="<?php echo admin_url('admin.php?page=smm-leagues'); ?>">Manage leagues →</a>
                             </p>
                         </td>
                     </tr>
+
+                    <tr>
+                        <th><label for="competition_id">Competition</label></th>
+                        <td>
+                            <select name="competition_id" id="competition_id">
+                                <option value="0" data-duration="">— None —</option>
+                                <?php foreach ($comps_for_league as $c):
+                                    $computed = SMM_Competitions::compute_duration_from_row($c);
+                                    ?>
+                                    <option value="<?php echo $c->id; ?>"
+                                            data-duration="<?php echo intval($computed); ?>"
+                                            data-league="<?php echo intval($c->league_id); ?>"
+                                        <?php selected($match ? $match->competition_id : 0, $c->id); ?>>
+                                        <?php echo esc_html($c->competition_name); ?>
+                                        <?php if ($c->season) echo ' (' . esc_html($c->season) . ')'; ?>
+                                        <?php if (!$c->league_id) echo ' — cross-league'; ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description">
+                                Selecting a competition auto-fills the duration below.
+                                <a href="<?php echo admin_url('admin.php?page=smm-competitions'); ?>">Manage competitions →</a>
+                            </p>
+                        </td>
+                    </tr>
+
                     <tr>
                         <th><label for="round">Round / Matchday</label></th>
                         <td><input type="text" name="round" id="round" class="small-text"
                                    placeholder="e.g. MD3"
                                    value="<?php echo $match ? esc_attr($match->round) : ''; ?>"></td>
                     </tr>
+
+                    <tr>
+                        <th><label for="match_duration">Duration (minutes)</label></th>
+                        <td>
+                            <input type="number" name="match_duration" id="match_duration"
+                                   min="0" step="5" placeholder="e.g. 90"
+                                   value="<?php echo ($match && $match->match_duration) ? esc_attr($match->match_duration) : ''; ?>">
+                            <p class="description">
+                                Auto-filled from the selected competition. Override if needed.
+                                Used for time-overlap conflict detection.
+                            </p>
+                        </td>
+                    </tr>
+
                     <tr>
                         <th><label for="status">Status</label></th>
                         <td>
@@ -783,37 +966,48 @@ class SMM_Admin {
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <p class="description">Canceled and postponed matches don't trigger conflicts.</p>
                         </td>
                     </tr>
+
                     <tr>
                         <th><label for="home_team_id">Home Team</label></th>
                         <td>
                             <select name="home_team_id" id="home_team_id" class="smm-team-select" required>
                                 <option value="">— Select —</option>
-                                <?php foreach ($teams as $t): ?>
+                                <?php foreach ($teams_for_league as $t):
+                                    $is_mine = in_array(intval($t->id), $my_team_ids, true);
+                                    ?>
                                     <option value="<?php echo $t->id; ?>"
+                                            data-league="<?php echo intval($t->league_id); ?>"
+                                            data-my-team="<?php echo $is_mine ? '1' : '0'; ?>"
                                         <?php selected($match ? $match->home_team_id : 0, $t->id); ?>>
-                                        <?php echo esc_html($t->team_name); ?>
+                                        <?php if ($is_mine) echo '★ '; ?><?php echo esc_html($t->team_name); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
+                            <p class="description">★ = a team you have active players on.</p>
                         </td>
                     </tr>
+
                     <tr>
                         <th><label for="away_team_id">Away Team</label></th>
                         <td>
                             <select name="away_team_id" id="away_team_id" class="smm-team-select" required>
                                 <option value="">— Select —</option>
-                                <?php foreach ($teams as $t): ?>
+                                <?php foreach ($teams_for_league as $t):
+                                    $is_mine = in_array(intval($t->id), $my_team_ids, true);
+                                    ?>
                                     <option value="<?php echo $t->id; ?>"
+                                            data-league="<?php echo intval($t->league_id); ?>"
+                                            data-my-team="<?php echo $is_mine ? '1' : '0'; ?>"
                                         <?php selected($match ? $match->away_team_id : 0, $t->id); ?>>
-                                        <?php echo esc_html($t->team_name); ?>
+                                        <?php if ($is_mine) echo '★ '; ?><?php echo esc_html($t->team_name); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                         </td>
                     </tr>
+
                     <tr>
                         <th><label for="location_id">Location</label></th>
                         <td>
@@ -829,6 +1023,7 @@ class SMM_Admin {
                             </select>
                         </td>
                     </tr>
+
                     <tr>
                         <th><label for="notes">Notes</label></th>
                         <td><textarea name="notes" id="notes" rows="3" class="large-text"
@@ -836,6 +1031,7 @@ class SMM_Admin {
                             echo $match ? esc_textarea($match->notes) : '';
                         ?></textarea></td>
                     </tr>
+
                     <tr>
                         <th>Attending Players</th>
                         <td>
@@ -877,6 +1073,7 @@ class SMM_Admin {
                             </fieldset>
                         </td>
                     </tr>
+
                     <?php if (!$match): ?>
                     <tr>
                         <th><label for="repeat_weeks">Repeat weekly</label></th>
@@ -897,9 +1094,126 @@ class SMM_Admin {
         <?php
     }
 
+    /* ============================================================
+       PAGE: LEAGUES
+       ============================================================ */
+
+    public function leagues_page() {
+        $leagues = SMM_Leagues::get_all();
+        $edit = isset($_GET['edit']) ? SMM_Leagues::get(intval($_GET['edit'])) : null;
+        ?>
+        <div class="wrap">
+            <h1>Leagues</h1>
+
+            <?php if (isset($_GET['message'])): ?>
+                <div class="notice notice-success is-dismissible"><p><?php
+                    $m = array(
+                        'league_added' => 'League added.',
+                        'league_updated' => 'League updated.',
+                        'league_deleted' => 'League deleted.',
+                    );
+                    echo esc_html($m[$_GET['message']] ?? 'Done.');
+                ?></p></div>
+            <?php endif; ?>
+
+            <p class="description" style="max-width:700px;">
+                A <strong>League</strong> is a season-long registration container — e.g. "Fall 2025 U12 South".
+                Teams are assigned to a league, and competitions can optionally belong to a league.
+                Cross-league competitions (tournaments with teams from many leagues) leave the league blank.
+            </p>
+
+            <div class="smm-players-layout">
+                <div class="smm-player-form-wrap">
+                    <h2><?php echo $edit ? 'Edit League' : 'Add League'; ?></h2>
+                    <form method="post">
+                        <?php wp_nonce_field($edit ? 'smm_update_league' : 'smm_add_league', 'smm_nonce'); ?>
+                        <?php if ($edit): ?>
+                            <input type="hidden" name="league_id" value="<?php echo $edit->id; ?>">
+                        <?php endif; ?>
+
+                        <table class="form-table">
+                            <tr>
+                                <th><label for="league_name">Name</label></th>
+                                <td><input type="text" name="league_name" id="league_name" required
+                                           placeholder="e.g. Fall 2025 U12 South"
+                                           value="<?php echo $edit ? esc_attr($edit->league_name) : ''; ?>"></td>
+                            </tr>
+                            <tr>
+                                <th><label for="season">Season</label></th>
+                                <td><input type="text" name="season" id="season"
+                                           placeholder="e.g. 2025 or Fall 2025"
+                                           value="<?php echo $edit ? esc_attr($edit->season) : ''; ?>"></td>
+                            </tr>
+                            <tr>
+                                <th><label for="age_group">Age group</label></th>
+                                <td><input type="text" name="age_group" id="age_group"
+                                           placeholder="e.g. U12"
+                                           value="<?php echo $edit ? esc_attr($edit->age_group) : ''; ?>"></td>
+                            </tr>
+                            <tr>
+                                <th><label for="color">Color</label></th>
+                                <td>
+                                    <input type="color" name="color" id="color"
+                                           value="<?php echo $edit ? esc_attr($edit->color) : '#0d6efd'; ?>">
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="notes">Notes</label></th>
+                                <td><textarea name="notes" id="notes" rows="3" class="large-text"><?php
+                                    echo $edit ? esc_textarea($edit->notes) : '';
+                                ?></textarea></td>
+                            </tr>
+                        </table>
+
+                        <?php submit_button($edit ? 'Update League' : 'Add League', 'primary',
+                            $edit ? 'smm_update_league' : 'smm_add_league'); ?>
+                        <?php if ($edit): ?>
+                            <a href="<?php echo admin_url('admin.php?page=smm-leagues'); ?>">Cancel</a>
+                        <?php endif; ?>
+                    </form>
+                </div>
+
+                <div class="smm-players-list-wrap">
+                    <h2>All Leagues</h2>
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead><tr>
+                            <th>Badge</th><th>Name</th><th>Season</th><th>Age</th>
+                            <th>Teams</th><th>Comps</th><th>Actions</th>
+                        </tr></thead>
+                        <tbody>
+                        <?php if (empty($leagues)): ?>
+                            <tr><td colspan="7">No leagues yet.</td></tr>
+                        <?php else: foreach ($leagues as $l): ?>
+                            <tr>
+                                <td><?php echo SMM_Leagues::badge_html($l->id); ?></td>
+                                <td><?php echo esc_html($l->league_name); ?></td>
+                                <td><?php echo esc_html($l->season); ?></td>
+                                <td><?php echo esc_html($l->age_group); ?></td>
+                                <td><?php echo SMM_Leagues::count_teams($l->id); ?></td>
+                                <td><?php echo SMM_Leagues::count_competitions($l->id); ?></td>
+                                <td>
+                                    <a href="<?php echo admin_url('admin.php?page=smm-leagues&edit=' . $l->id); ?>">Edit</a> |
+                                    <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=smm-leagues&action=delete_league&id=' . $l->id), 'smm_del_league_' . $l->id); ?>"
+                                       onclick="return confirm('Delete this league? Teams and competitions will be detached.');">Delete</a>
+                                </td>
+                            </tr>
+                        <?php endforeach; endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
+    /* ============================================================
+       PAGE: COMPETITIONS
+       ============================================================ */
+
     public function competitions_page() {
         $competitions = SMM_Competitions::get_all();
-        $edit_comp = isset($_GET['edit']) ? SMM_Competitions::get(intval($_GET['edit'])) : null;
+        $leagues = SMM_Leagues::get_all();
+        $edit = isset($_GET['edit']) ? SMM_Competitions::get(intval($_GET['edit'])) : null;
         ?>
         <div class="wrap">
             <h1>Competitions</h1>
@@ -917,60 +1231,160 @@ class SMM_Admin {
 
             <div class="smm-players-layout">
                 <div class="smm-player-form-wrap">
-                    <h2><?php echo $edit_comp ? 'Edit Competition' : 'Add Competition'; ?></h2>
-                    <form method="post">
-                        <?php wp_nonce_field($edit_comp ? 'smm_update_competition' : 'smm_add_competition', 'smm_nonce'); ?>
-                        <?php if ($edit_comp): ?>
-                            <input type="hidden" name="competition_id" value="<?php echo $edit_comp->id; ?>">
+                    <h2><?php echo $edit ? 'Edit Competition' : 'Add Competition'; ?></h2>
+                    <form method="post" id="smm-competition-form">
+                        <?php wp_nonce_field($edit ? 'smm_update_competition' : 'smm_add_competition', 'smm_nonce'); ?>
+                        <?php if ($edit): ?>
+                            <input type="hidden" name="competition_id" value="<?php echo $edit->id; ?>">
                         <?php endif; ?>
 
                         <table class="form-table">
                             <tr>
                                 <th><label for="competition_name">Name</label></th>
                                 <td><input type="text" name="competition_name" id="competition_name" required
-                                           placeholder="e.g. Fall League"
-                                           value="<?php echo $edit_comp ? esc_attr($edit_comp->competition_name) : ''; ?>"></td>
+                                           placeholder="e.g. Fall League Regular Season"
+                                           value="<?php echo $edit ? esc_attr($edit->competition_name) : ''; ?>"></td>
                             </tr>
                             <tr>
                                 <th><label for="short_label">Short label</label></th>
-                                <td>
-                                    <input type="text" name="short_label" id="short_label"
+                                <td><input type="text" name="short_label" id="short_label"
                                            placeholder="e.g. FL"
-                                           value="<?php echo $edit_comp ? esc_attr($edit_comp->short_label) : ''; ?>">
-                                    <p class="description">Optional. Shown as a badge in lists.</p>
+                                           value="<?php echo $edit ? esc_attr($edit->short_label) : ''; ?>"></td>
+                            </tr>
+                            <tr>
+                                <th><label for="league_id">League</label></th>
+                                <td>
+                                    <select name="league_id" id="league_id">
+                                        <option value="0">— Cross-league (any team) —</option>
+                                        <?php foreach ($leagues as $l): ?>
+                                            <option value="<?php echo $l->id; ?>"
+                                                <?php selected($edit ? $edit->league_id : 0, $l->id); ?>>
+                                                <?php echo esc_html($l->league_name); ?>
+                                                <?php if ($l->season) echo ' (' . esc_html($l->season) . ')'; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <p class="description">
+                                        Leave empty for tournaments and cups with teams from multiple leagues.
+                                    </p>
                                 </td>
                             </tr>
                             <tr>
                                 <th><label for="season">Season</label></th>
                                 <td><input type="text" name="season" id="season"
-                                           placeholder="e.g. 2025 or Fall 2025"
-                                           value="<?php echo $edit_comp ? esc_attr($edit_comp->season) : ''; ?>"></td>
+                                           value="<?php echo $edit ? esc_attr($edit->season) : ''; ?>"></td>
                             </tr>
                             <tr>
                                 <th><label for="age_group">Age group</label></th>
                                 <td><input type="text" name="age_group" id="age_group"
-                                           placeholder="e.g. U12, Varsity"
-                                           value="<?php echo $edit_comp ? esc_attr($edit_comp->age_group) : ''; ?>"></td>
+                                           value="<?php echo $edit ? esc_attr($edit->age_group) : ''; ?>"></td>
                             </tr>
                             <tr>
                                 <th><label for="color">Color</label></th>
+                                <td><input type="color" name="color" id="color"
+                                           value="<?php echo $edit ? esc_attr($edit->color) : '#0d6efd'; ?>"></td>
+                            </tr>
+
+                            <!-- Period configuration -->
+                            <tr>
+                                <th colspan="2" style="padding-bottom:0;">
+                                    <hr>
+                                    <h3 style="margin:0;">Match Format</h3>
+                                </th>
+                            </tr>
+                            <tr>
+                                <th><label for="periods">Periods</label></th>
                                 <td>
-                                    <input type="color" name="color" id="color"
-                                           value="<?php echo $edit_comp ? esc_attr($edit_comp->color) : '#0d6efd'; ?>">
-                                    <p class="description">Used for the badge in match lists.</p>
+                                    <select name="periods" id="periods">
+                                        <?php
+                                        $current_periods = $edit ? intval($edit->periods) : 2;
+                                        foreach (array(2 => 'Halves (2)', 4 => 'Quarters (4)', 1 => 'Single period', 3 => 'Thirds (3)') as $k => $v):
+                                            ?>
+                                            <option value="<?php echo $k; ?>"
+                                                <?php selected($current_periods, $k); ?>>
+                                                <?php echo esc_html($v); ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <p class="description">
+                                        Halves enable a halftime and optional water breaks.
+                                        Quarters enable short breaks between periods plus halftime.
+                                    </p>
                                 </td>
                             </tr>
                             <tr>
+                                <th><label for="period_minutes">Length of each period (min)</label></th>
+                                <td><input type="number" name="period_minutes" id="period_minutes"
+                                           min="1" step="1"
+                                           value="<?php echo $edit ? intval($edit->period_minutes) : 45; ?>"></td>
+                            </tr>
+                            <tr class="smm-field-halves">
+                                <th><label for="halftime_minutes">Halftime (min)</label></th>
+                                <td><input type="number" name="halftime_minutes" id="halftime_minutes"
+                                           min="0" step="1"
+                                           value="<?php echo $edit ? intval($edit->halftime_minutes) : 15; ?>">
+                                    <p class="description">Break at the midpoint of the match.</p>
+                                </td>
+                            </tr>
+                            <tr class="smm-field-halves">
+                                <th><label for="water_break_minutes">Water break (min, each half)</label></th>
+                                <td><input type="number" name="water_break_minutes" id="water_break_minutes"
+                                           min="0" step="1"
+                                           value="<?php echo $edit ? intval($edit->water_break_minutes) : 0; ?>">
+                                    <p class="description">
+                                        Added mid-way through each half. Set to 0 if not used.
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr class="smm-field-quarters">
+                                <th><label for="break_minutes">Break between periods (min)</label></th>
+                                <td><input type="number" name="break_minutes" id="break_minutes"
+                                           min="0" step="1"
+                                           value="<?php echo $edit ? intval($edit->break_minutes) : 5; ?>">
+                                    <p class="description">
+                                        Short breaks between quarters. Halftime applies at the midpoint.
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr class="smm-field-quarters">
+                                <th><label for="halftime_minutes_q">Halftime (min)</label></th>
+                                <td><input type="number" name="halftime_minutes" id="halftime_minutes_q"
+                                           min="0" step="1"
+                                           value="<?php echo $edit ? intval($edit->halftime_minutes) : 10; ?>">
+                                    <p class="description">Longer break at the midpoint.</p>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <th>Computed total</th>
+                                <td>
+                                    <div id="smm-computed-duration" class="smm-computed-duration">
+                                        <?php
+                                        if ($edit) {
+                                            $computed = SMM_Competitions::compute_duration_from_row($edit);
+                                            echo esc_html($computed) . ' minutes';
+                                        } else {
+                                            echo '—';
+                                        }
+                                        ?>
+                                    </div>
+                                    <p class="description">
+                                        Approximate total duration. Auto-applied to matches when this competition is selected.
+                                    </p>
+                                </td>
+                            </tr>
+
+                            <tr>
                                 <th><label for="notes">Notes</label></th>
-                                <td><textarea name="notes" id="notes" rows="3" class="large-text"><?php
-                                    echo $edit_comp ? esc_textarea($edit_comp->notes) : '';
+                                <td><textarea name="notes" id="notes" rows="2" class="large-text"><?php
+                                    echo $edit ? esc_textarea($edit->notes) : '';
                                 ?></textarea></td>
                             </tr>
                         </table>
 
-                        <?php submit_button($edit_comp ? 'Update Competition' : 'Add Competition', 'primary',
-                            $edit_comp ? 'smm_update_competition' : 'smm_add_competition'); ?>
-                        <?php if ($edit_comp): ?>
+                        <?php submit_button($edit ? 'Update Competition' : 'Add Competition', 'primary',
+                            $edit ? 'smm_update_competition' : 'smm_add_competition'); ?>
+                        <?php if ($edit): ?>
                             <a href="<?php echo admin_url('admin.php?page=smm-competitions'); ?>">Cancel</a>
                         <?php endif; ?>
                     </form>
@@ -980,21 +1394,31 @@ class SMM_Admin {
                     <h2>All Competitions</h2>
                     <table class="wp-list-table widefat fixed striped">
                         <thead><tr>
-                            <th>Badge</th><th>Name</th><th>Season</th><th>Age group</th>
-                            <th>Matches</th><th>Actions</th>
+                            <th>Badge</th><th>Name</th><th>League</th><th>Format</th>
+                            <th>Duration</th><th>Matches</th><th>Actions</th>
                         </tr></thead>
                         <tbody>
                         <?php if (empty($competitions)): ?>
-                            <tr><td colspan="6">No competitions yet.</td></tr>
+                            <tr><td colspan="7">No competitions yet.</td></tr>
                         <?php else: foreach ($competitions as $c):
-                            $count = SMM_Competitions::count_matches($c->id);
+                            $computed = SMM_Competitions::compute_duration_from_row($c);
+                            $format = intval($c->periods) === 2
+                                ? '2 × ' . intval($c->period_minutes)
+                                : intval($c->periods) . ' × ' . intval($c->period_minutes);
                             ?>
                             <tr>
                                 <td><?php echo SMM_Competitions::badge_html($c->id); ?></td>
                                 <td><?php echo esc_html($c->competition_name); ?></td>
-                                <td><?php echo esc_html($c->season); ?></td>
-                                <td><?php echo esc_html($c->age_group); ?></td>
-                                <td><?php echo intval($count); ?></td>
+                                <td>
+                                    <?php if ($c->league_id): ?>
+                                        <?php echo SMM_Leagues::badge_html($c->league_id); ?>
+                                    <?php else: ?>
+                                        <em>cross-league</em>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?php echo esc_html($format); ?></td>
+                                <td><?php echo intval($computed); ?> min</td>
+                                <td><?php echo SMM_Competitions::count_matches($c->id); ?></td>
                                 <td>
                                     <a href="<?php echo admin_url('admin.php?page=smm-competitions&edit=' . $c->id); ?>">Edit</a> |
                                     <a href="<?php echo wp_nonce_url(admin_url('admin.php?page=smm-competitions&action=delete_competition&id=' . $c->id), 'smm_del_competition_' . $c->id); ?>"
@@ -1010,8 +1434,13 @@ class SMM_Admin {
         <?php
     }
 
+    /* ============================================================
+       PAGE: TEAMS
+       ============================================================ */
+
     public function teams_page() {
         $teams = SMM_Teams::get_all();
+        $leagues = SMM_Leagues::get_all();
         $edit_team = isset($_GET['edit']) ? SMM_Teams::get(intval($_GET['edit'])) : null;
         ?>
         <div class="wrap">
@@ -1044,11 +1473,32 @@ class SMM_Admin {
                                            value="<?php echo $edit_team ? esc_attr($edit_team->team_name) : ''; ?>"></td>
                             </tr>
                             <tr>
+                                <th><label for="team_league_id">League</label></th>
+                                <td>
+                                    <select name="team_league_id" id="team_league_id">
+                                        <option value="0">— No league —</option>
+                                        <?php foreach ($leagues as $l): ?>
+                                            <option value="<?php echo $l->id; ?>"
+                                                <?php selected($edit_team ? $edit_team->league_id : 0, $l->id); ?>>
+                                                <?php echo esc_html($l->league_name); ?>
+                                                <?php if ($l->season) echo ' (' . esc_html($l->season) . ')'; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <p class="description">
+                                        The league this team is registered in for the current season.
+                                        <a href="<?php echo admin_url('admin.php?page=smm-leagues'); ?>">Manage leagues →</a>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
                                 <th><label for="default_duration">Default duration (min)</label></th>
                                 <td><input type="number" name="default_duration" id="default_duration"
                                            min="0" step="5"
                                            value="<?php echo ($edit_team && $edit_team->default_duration) ? esc_attr($edit_team->default_duration) : ''; ?>">
-                                    <p class="description">Optional. Prefills match duration for this team's games.</p>
+                                    <p class="description">
+                                        Fallback when a match has no competition. Competition format wins if set.
+                                    </p>
                                 </td>
                             </tr>
                             <tr>
@@ -1084,15 +1534,23 @@ class SMM_Admin {
                     <h2>All Teams</h2>
                     <table class="wp-list-table widefat fixed striped">
                         <thead><tr>
-                            <th style="width:60px;">Logo</th><th>Team Name</th><th>Default Duration</th><th>Actions</th>
+                            <th style="width:60px;">Logo</th><th>Team Name</th><th>League</th>
+                            <th>Default Duration</th><th>Actions</th>
                         </tr></thead>
                         <tbody>
                         <?php if (empty($teams)): ?>
-                            <tr><td colspan="4">No teams yet.</td></tr>
+                            <tr><td colspan="5">No teams yet.</td></tr>
                         <?php else: foreach ($teams as $t): ?>
                             <tr>
                                 <td><?php echo SMM_Teams::get_logo_html($t, array(40,40)); ?></td>
                                 <td><?php echo esc_html($t->team_name); ?></td>
+                                <td>
+                                    <?php if ($t->league_id): ?>
+                                        <?php echo SMM_Leagues::badge_html($t->league_id); ?>
+                                    <?php else: ?>
+                                        —
+                                    <?php endif; ?>
+                                </td>
                                 <td><?php echo $t->default_duration ? intval($t->default_duration) . ' min' : '—'; ?></td>
                                 <td>
                                     <a href="<?php echo admin_url('admin.php?page=smm-teams&edit=' . $t->id); ?>">Edit</a> |
@@ -1108,6 +1566,10 @@ class SMM_Admin {
         </div>
         <?php
     }
+
+    /* ============================================================
+       PAGE: PLAYERS (unchanged from v6.3)
+       ============================================================ */
 
     public function players_page() {
         $players = SMM_Players::get_all();
@@ -1174,10 +1636,6 @@ class SMM_Admin {
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <p class="description">
-                                        Only <strong>Available</strong> and <strong>Maybe</strong>
-                                        players count for conflict detection.
-                                    </p>
                                 </td>
                             </tr>
                             <?php if ($edit_player): ?>
@@ -1244,6 +1702,10 @@ class SMM_Admin {
         <?php
     }
 
+    /* ============================================================
+       PAGE: LOCATIONS (unchanged from v6.3)
+       ============================================================ */
+
     public function locations_page() {
         $locations = SMM_Locations::get_all();
         $edit_location = isset($_GET['edit']) ? SMM_Locations::get(intval($_GET['edit'])) : null;
@@ -1297,10 +1759,6 @@ class SMM_Admin {
                                 <td>
                                     <input type="number" name="travel_buffer_minutes" id="travel_buffer_minutes"
                                            min="0" step="5" value="<?php echo $edit_location ? intval($edit_location->travel_buffer_minutes) : 30; ?>">
-                                    <p class="description">
-                                        Only used when checking conflicts between <em>different</em>
-                                        locations. Same-location back-to-back games don't need a buffer.
-                                    </p>
                                 </td>
                             </tr>
                         </table>
@@ -1347,6 +1805,10 @@ class SMM_Admin {
         <?php
     }
 
+    /* ============================================================
+       PAGE: IMPORT / EXPORT
+       ============================================================ */
+
     public function import_export_page() {
         $result = get_transient('smm_import_result_' . get_current_user_id());
         if ($result) delete_transient('smm_import_result_' . get_current_user_id());
@@ -1378,19 +1840,20 @@ class SMM_Admin {
             <h2>Recommended Import Order</h2>
             <p>
                 Import these first so matches can link to them:
-                <strong>Locations → Competitions → Teams → Players → Matches</strong>.
+                <strong>Leagues → Locations → Competitions → Teams → Players → Matches</strong>.
                 Each file matches by name, so running an import twice is safe.
             </p>
 
             <h2>Export</h2>
-            <table class="widefat striped" style="max-width:800px;">
+            <table class="widefat striped" style="max-width:900px;">
                 <thead><tr><th>Entity</th><th>What's included</th><th>Download</th></tr></thead>
                 <tbody>
                 <?php
                 $exports = array(
+                    'leagues'      => array('Leagues', 'name, season, age_group, color, notes'),
                     'locations'    => array('Locations', 'name, address, latitude, longitude, travel_buffer_minutes'),
-                    'competitions' => array('Competitions', 'name, short_label, season, age_group, color, notes'),
-                    'teams'        => array('Teams', 'name, default_duration'),
+                    'competitions' => array('Competitions', 'name, league, short_label, season, age_group, color, periods, period_minutes, break_minutes, halftime_minutes, water_break_minutes, notes'),
+                    'teams'        => array('Teams', 'name, league, default_duration'),
                     'players'      => array('Players', 'name, email, team, availability, is_active'),
                     'matches'      => array('Matches', 'date, time, duration, home_team, away_team, location, status, competition, round, notes'),
                 );
@@ -1410,18 +1873,19 @@ class SMM_Admin {
             </table>
 
             <h2>Import</h2>
-            <p>CSV files must have a header row. Team/location/competition names are matched case-sensitively.</p>
+            <p>CSV files must have a header row. Names are matched case-sensitively.</p>
 
-            <table class="widefat striped" style="max-width:900px;">
+            <table class="widefat striped" style="max-width:1000px;">
                 <thead><tr><th>Entity</th><th>Required columns</th><th>Upload</th></tr></thead>
                 <tbody>
                 <?php
                 $imports = array(
+                    'leagues'      => array('Leagues', 'name'),
                     'locations'    => array('Locations', 'name'),
                     'competitions' => array('Competitions', 'name'),
                     'teams'        => array('Teams', 'name'),
                     'players'      => array('Players', 'name'),
-                    'matches'      => array('Matches', 'date, time, home_team, away_team, location'),
+                    'matches'      => array('Matches', 'date, home_team, away_team, location'),
                 );
                 foreach ($imports as $key => $info): ?>
                     <tr>
@@ -1443,30 +1907,13 @@ class SMM_Admin {
                 <?php endforeach; ?>
                 </tbody>
             </table>
-
-            <h2>Templates</h2>
-            <p>Click to download a starter CSV with one example row:</p>
-            <p>
-                <?php
-                $templates = array(
-                    'locations' => "name,address,latitude,longitude,travel_buffer_minutes\nMain Field,123 Park Ave,40.7128,-74.0060,30\n",
-                    'competitions' => "name,short_label,season,age_group,color,notes\nFall League,FL,2025,U12,#0d6efd,\n",
-                    'teams' => "name,default_duration\nLions,90\nTigers,90\n",
-                    'players' => "name,email,team,availability,is_active\nJohn Doe,john@example.com,Lions,available,1\n",
-                    'matches' => "date,time,duration,home_team,away_team,location,status,competition,round,notes\n2025-09-06,10:00,90,Lions,Tigers,Main Field,scheduled,Fall League,MD1,\n",
-                );
-                foreach ($templates as $key => $csv):
-                    $url = 'data:text/csv;charset=utf-8,' . rawurlencode($csv);
-                    ?>
-                    <a class="button" href="<?php echo esc_url($url); ?>"
-                       download="smm-<?php echo esc_attr($key); ?>-template.csv">
-                        <?php echo esc_html(ucfirst($key)); ?> template
-                    </a>
-                <?php endforeach; ?>
-            </p>
         </div>
         <?php
     }
+
+    /* ============================================================
+       PAGE: SETTINGS
+       ============================================================ */
 
     public function settings_page() {
         if (isset($_GET['message']) && $_GET['message'] === 'saved') {
@@ -1486,7 +1933,6 @@ class SMM_Admin {
                                    min="5" max="120" value="<?php echo intval($speed); ?>">
                             <p class="description">
                                 Used to estimate driving time between locations for conflict detection.
-                                Realistic range: 40 (city) to 70 (highway/suburban).
                             </p>
                         </td>
                     </tr>

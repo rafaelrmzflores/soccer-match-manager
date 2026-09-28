@@ -294,3 +294,159 @@
 .smm-conflict-panel__list a:hover {
     text-decoration: underline;
 }
+/* =====================================================================
+   v7.0 — Leagues, TBD, period config
+   ===================================================================== */
+
+/* League badge (distinct from competition badge — outlined style) */
+.smm-league-badge {
+    display: inline-block;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+    white-space: nowrap;
+}
+
+/* TBD time indicator */
+.smm-tbd {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    background: #f3f4f6;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: .3px;
+}
+
+/* Muted conflict indicator for matches without a time */
+.smm-no-conflict--muted {
+    background: #f3f4f6 !important;
+    color: #6b7280 !important;
+    cursor: help;
+}
+
+/* Computed duration display on the competition form */
+.smm-computed-duration {
+    display: inline-block;
+    padding: 6px 12px;
+    background: #eaf7ee;
+    color: #1e7e34;
+    border-left: 3px solid #28a745;
+    border-radius: 3px;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+/* Hide/show blocks for period types */
+.smm-field-halves,
+.smm-field-quarters {
+    /* toggled by JS */
+}
+
+/* Small polish: sort links, conflict panel (already existed — retained) */
+.smm-sort-link {
+    color: inherit;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+.smm-sort-link:hover { text-decoration: underline; }
+.smm-sort-link.smm-sort-active { font-weight: 600; }
+
+.smm-conflict-panel {
+    margin: 12px 0 16px;
+    border: 1px solid #fcd34d;
+    border-radius: 6px;
+    background: #fffbeb;
+    overflow: hidden;
+}
+.smm-conflict-panel__summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #92400e;
+    font-size: 13px;
+    user-select: none;
+    list-style: none;
+}
+.smm-conflict-panel__summary::-webkit-details-marker { display: none; }
+.smm-conflict-panel__summary::before {
+    content: "▸";
+    display: inline-block;
+    transition: transform .15s ease;
+    font-size: 11px;
+    opacity: .7;
+}
+.smm-conflict-panel[open] .smm-conflict-panel__summary::before {
+    transform: rotate(90deg);
+}
+.smm-conflict-panel__summary:hover { background: #fef3c7; }
+.smm-conflict-panel__icon { font-size: 15px; }
+.smm-conflict-panel__hint {
+    margin-left: auto;
+    font-size: 11px;
+    opacity: .6;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+.smm-conflict-panel__body {
+    padding: 12px 16px;
+    background: #fff;
+    border-top: 1px solid #fcd34d;
+}
+.smm-conflict-panel__group {
+    padding: 10px 0;
+    border-bottom: 1px dashed #e5e7eb;
+}
+.smm-conflict-panel__group:last-child { border-bottom: none; padding-bottom: 0; }
+.smm-conflict-panel__group:first-child { padding-top: 0; }
+.smm-conflict-panel__name {
+    font-weight: 600;
+    font-size: 14px;
+    color: #1f2937;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.smm-conflict-panel__count {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: #fcd34d;
+    color: #92400e;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.smm-conflict-panel__list {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 14px;
+    font-size: 13px;
+}
+.smm-conflict-panel__list li {
+    padding: 3px 0;
+    color: #4b5563;
+    position: relative;
+}
+.smm-conflict-panel__list li::before {
+    content: "·";
+    position: absolute;
+    left: -10px;
+    color: #9ca3af;
+}
+.smm-conflict-panel__list a {
+    color: #2271b1;
+    text-decoration: none;
+}
+.smm-conflict-panel__list a:hover { text-decoration: underline; }
