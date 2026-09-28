@@ -19,6 +19,7 @@ class SMM_Database {
             season varchar(50) DEFAULT '',
             age_group varchar(50) DEFAULT '',
             color varchar(7) DEFAULT '#0d6efd',
+            logo_id bigint(20) DEFAULT 0,
             notes text,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
@@ -135,6 +136,7 @@ class SMM_Database {
         $wpdb->query("UPDATE $competitions SET break_minutes = 5 WHERE break_minutes IS NULL");
         $wpdb->query("UPDATE $competitions SET halftime_minutes = 15 WHERE halftime_minutes IS NULL");
         $wpdb->query("UPDATE $competitions SET water_break_minutes = 0 WHERE water_break_minutes IS NULL");
+        $wpdb->query("UPDATE $leagues SET logo_id = 0 WHERE logo_id IS NULL");
 
         // Legacy migrations
         self::migrate_legacy_competitions();

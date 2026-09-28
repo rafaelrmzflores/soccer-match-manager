@@ -37,7 +37,7 @@ class SMM_Leagues {
             : $l->league_name;
     }
 
-    public static function add($name, $season = '', $age_group = '', $color = '#0d6efd', $notes = '') {
+    public static function add($name, $season = '', $age_group = '', $color = '#0d6efd', $notes = '', $logo_id = 0) {
         global $wpdb;
         $name = sanitize_text_field($name);
         if (empty($name)) return false;
@@ -47,11 +47,12 @@ class SMM_Leagues {
             'season'      => sanitize_text_field($season),
             'age_group'   => sanitize_text_field($age_group),
             'color'       => self::sanitize_color($color),
+            'logo_id'     => intval($logo_id),
             'notes'       => sanitize_textarea_field($notes),
         ));
     }
 
-    public static function update($id, $name, $season, $age_group, $color, $notes) {
+    public static function update($id, $name, $season, $age_group, $color, $notes, $logo_id = 0) {
         global $wpdb;
         return $wpdb->update(
             $wpdb->prefix . 'soccer_leagues',
@@ -60,6 +61,7 @@ class SMM_Leagues {
                 'season'      => sanitize_text_field($season),
                 'age_group'   => sanitize_text_field($age_group),
                 'color'       => self::sanitize_color($color),
+                'logo_id'     => intval($logo_id),
                 'notes'       => sanitize_textarea_field($notes),
             ),
             array('id' => intval($id))
@@ -108,14 +110,45 @@ class SMM_Leagues {
         return '#0d6efd';
     }
 
-    public static function badge_html($id) {
+        /**
+     * Renders a league indicator: logo if set, otherwise a colored pill
+     * with the league name.
+     */
+    public static function badge_html($id, $size = array(24, 24)) {
         $l = self::get($id);
         if (!$l) return '';
+
+        $logo = self::get_logo_html($l, $size);
+        if ($logo) {
+            return sprintf(
+                '<span class="smm-league-mark smm-league-mark--logo" title="%s">%s</span>',
+                esc_attr($l->league_name . ($l->season ? ' (' . $l->season . ')' : '')),
+                $logo
+            );
+        }
+
+        // Fallback: colored pill (existing behavior)
         return sprintf(
             '<span class="smm-league-badge" style="background:%s" title="%s">%s</span>',
             esc_attr($l->color),
             esc_attr($l->league_name . ($l->season ? ' (' . $l->season . ')' : '')),
             esc_html($l->league_name)
         );
+    }
+
+    /**
+     * Returns the league logo as an <img> tag, or '' if none is set.
+     */
+    public static function get_logo_html($league, $size = array(24, 24), $class = 'smm-league-logo') {
+        if (!$league) return '';
+        if (empty($league->logo_id)) return '';
+
+        $img = wp_get_attachment_image(
+            $league->logo_id,
+            $size,
+            false,
+            array('class' => $class, 'alt' => esc_attr($league->league_name))
+        );
+        return $img ?: '';
     }
 }

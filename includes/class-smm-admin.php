@@ -172,7 +172,8 @@ class SMM_Admin {
                 $_POST['season'] ?? '',
                 $_POST['age_group'] ?? '',
                 $_POST['color'] ?? '#0d6efd',
-                $_POST['notes'] ?? ''
+                $_POST['notes'] ?? '',
+                intval($_POST['league_logo_id'] ?? 0)
             );
             wp_redirect(admin_url('admin.php?page=smm-leagues&message=league_added'));
             exit;
@@ -184,7 +185,8 @@ class SMM_Admin {
                 $_POST['season'] ?? '',
                 $_POST['age_group'] ?? '',
                 $_POST['color'] ?? '#0d6efd',
-                $_POST['notes'] ?? ''
+                $_POST['notes'] ?? '',
+                intval($_POST['league_logo_id'] ?? 0)
             );
             wp_redirect(admin_url('admin.php?page=smm-leagues&message=league_updated'));
             exit;
@@ -1141,6 +1143,30 @@ class SMM_Admin {
                                 <td>
                                     <input type="color" name="color" id="color"
                                            value="<?php echo $edit ? esc_attr($edit->color) : '#0d6efd'; ?>">
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="league_logo_id">Logo</label></th>
+                                <td>
+                                    <?php
+                                    $logo_id = $edit ? intval($edit->logo_id) : 0;
+                                    $logo_url = $logo_id ? wp_get_attachment_image_url($logo_id, 'thumbnail') : '';
+                                    ?>
+                                    <div class="smm-logo-picker">
+                                        <div class="smm-logo-preview">
+                                            <?php if ($logo_url): ?>
+                                                <img src="<?php echo esc_url($logo_url); ?>" alt="">
+                                            <?php endif; ?>
+                                        </div>
+                                        <input type="hidden" name="league_logo_id" id="league_logo_id"
+                                               value="<?php echo esc_attr($logo_id); ?>">
+                                        <button type="button" class="button smm-upload-logo">Select Logo</button>
+                                        <button type="button" class="button smm-remove-logo"
+                                                style="<?php echo $logo_id ? '' : 'display:none;'; ?>">Remove</button>
+                                        <p class="description" style="margin-top:8px;">
+                                            Optional. If no logo is uploaded, a colored badge with the league name is shown instead.
+                                        </p>
+                                    </div>
                                 </td>
                             </tr>
                             <tr>

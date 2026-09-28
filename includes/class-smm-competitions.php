@@ -228,7 +228,7 @@ class SMM_Competitions {
         return '#0d6efd';
     }
 
-    public static function badge_html($id) {
+    public static function badge_html($id, $size = array(40, 40)) {
         $c = self::get($id);
         if (!$c) return '';
         $label = $c->short_label ?: $c->competition_name;

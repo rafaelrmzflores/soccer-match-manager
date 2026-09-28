@@ -11,7 +11,7 @@ jQuery(function ($) {
     });
     frame.on("select", function () {
       const attachment = frame.state().get("selection").first().toJSON();
-      wrap.find('input[name="team_logo_id"]').val(attachment.id);
+      wrap.find('input[type="hidden"][name$="_logo_id"]').val(attachment.id);
       const url =
         attachment.sizes && attachment.sizes.thumbnail
           ? attachment.sizes.thumbnail.url
@@ -29,7 +29,7 @@ jQuery(function ($) {
   $(document).on("click", ".smm-remove-logo", function (e) {
     e.preventDefault();
     const wrap = $(this).closest(".smm-logo-picker");
-    wrap.find('input[name="team_logo_id"]').val(0);
+    wrap.find('input[type="hidden"][name$="_logo_id"]').val(0);
     wrap.find(".smm-logo-preview").empty();
     $(this).hide();
   });
