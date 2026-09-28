@@ -6,16 +6,33 @@ class SMM_Helpers {
     }
 
     public static function fmt_date($ymd) {
+        if (empty($ymd)) return '';
         $ts = strtotime($ymd . ' 00:00:00');
         return $ts ? wp_date('M j, Y', $ts) : $ymd;
     }
 
+    /**
+     * Format a time. Returns 'TBD' for null/empty.
+     */
     public static function fmt_time($his) {
+        if (empty($his)) return 'TBD';
         $ts = strtotime('2000-01-01 ' . $his);
         return $ts ? wp_date('g:i A', $ts) : $his;
     }
 
+    /**
+     * True if the match has no time set. Accepts either a match row or a raw
+     * time string.
+     */
+    public static function is_time_tbd($match_or_time) {
+        if (is_object($match_or_time)) {
+            return empty($match_or_time->match_time);
+        }
+        return empty($match_or_time);
+    }
+
     public static function to_ts($ymd, $his) {
+        if (empty($ymd) || empty($his)) return null;
         $dt = date_create_from_format('Y-m-d H:i:s', $ymd . ' ' . $his, self::tz());
         return $dt ? $dt->getTimestamp() : strtotime($ymd . ' ' . $his);
     }

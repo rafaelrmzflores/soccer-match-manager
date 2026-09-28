@@ -5,6 +5,22 @@ class SMM_CSV_Entities {
        EXPORT
        ============================================================ */
 
+    public static function export_leagues() {
+        $rows = SMM_Leagues::get_all();
+        return self::to_csv(
+            array('name','season','age_group','color','notes'),
+            array_map(function($l) {
+                return array(
+                    $l->league_name,
+                    $l->season,
+                    $l->age_group,
+                    $l->color,
+                    $l->notes,
+                );
+            }, $rows)
+        );
+    }
+
     public static function export_locations() {
         $rows = SMM_Locations::get_all();
         return self::to_csv(
@@ -24,14 +40,22 @@ class SMM_CSV_Entities {
     public static function export_competitions() {
         $rows = SMM_Competitions::get_all();
         return self::to_csv(
-            array('name','short_label','season','age_group','color','notes'),
+            array('name','league','short_label','season','age_group','color',
+                  'periods','period_minutes','break_minutes','halftime_minutes','water_break_minutes','notes'),
             array_map(function($c) {
+                $league_name = $c->league_id ? SMM_Leagues::get_name($c->league_id) : '';
                 return array(
                     $c->competition_name,
+                    $league_name,
                     $c->short_label,
                     $c->season,
                     $c->age_group,
                     $c->color,
+                    intval($c->periods),
+                    intval($c->period_minutes),
+                    intval($c->break_minutes),
+                    intval($c->halftime_minutes),
+                    intval($c->water_break_minutes),
                     $c->notes,
                 );
             }, $rows)
@@ -41,10 +65,12 @@ class SMM_CSV_Entities {
     public static function export_teams() {
         $rows = SMM_Teams::get_all();
         return self::to_csv(
-            array('name','default_duration'),
+            array('name','league','default_duration'),
             array_map(function($t) {
+                $league_name = $t->league_id ? SMM_Leagues::get_name($t->league_id) : '';
                 return array(
                     $t->team_name,
+                    $league_name,
                     $t->default_duration,
                 );
             }, $rows)
@@ -82,6 +108,38 @@ class SMM_CSV_Entities {
        IMPORT
        ============================================================ */
 
+    public static function import_leagues($file_path, $update_existing = true) {
+        return self::import_generic($file_path, array(
+            'required' => array('name'),
+            'handler'  => function($row, $update_existing) {
+                $name = trim($row['name'] ?? '');
+                if (!$name) return 'skip';
+
+                $existing = SMM_Leagues::get_by_name($name);
+                if ($existing) {
+                    if (!$update_existing) return 'skip';
+                    SMM_Leagues::update(
+                        $existing->id, $name,
+                        $row['season'] ?? '',
+                        $row['age_group'] ?? '',
+                        $row['color'] ?? '#0d6efd',
+                        $row['notes'] ?? ''
+                    );
+                    return 'updated';
+                }
+
+                SMM_Leagues::add(
+                    $name,
+                    $row['season'] ?? '',
+                    $row['age_group'] ?? '',
+                    $row['color'] ?? '#0d6efd',
+                    $row['notes'] ?? ''
+                );
+                return 'added';
+            },
+        ));
+    }
+
     public static function import_locations($file_path, $update_existing = true) {
         return self::import_generic($file_path, array(
             'required' => array('name'),
@@ -118,6 +176,26 @@ class SMM_CSV_Entities {
                 $name = trim($row['name'] ?? '');
                 if (!$name) return 'skip';
 
+                // Look up league by name (find-or-create)
+                $league_id = 0;
+                $league_name = trim($row['league'] ?? '');
+                if ($league_name) {
+                    $l = SMM_Leagues::get_by_name($league_name);
+                    if ($l) {
+                        $league_id = intval($l->id);
+                    } else {
+                        SMM_Leagues::add($league_name);
+                        global $wpdb;
+                        $league_id = intval($wpdb->insert_id);
+                    }
+                }
+
+                $periods    = isset($row['periods']) && $row['periods'] !== '' ? intval($row['periods']) : 2;
+                $period_min = isset($row['period_minutes']) && $row['period_minutes'] !== '' ? intval($row['period_minutes']) : 45;
+                $break_min  = isset($row['break_minutes']) && $row['break_minutes'] !== '' ? intval($row['break_minutes']) : 5;
+                $half_min   = isset($row['halftime_minutes']) && $row['halftime_minutes'] !== '' ? intval($row['halftime_minutes']) : 15;
+                $water_min  = isset($row['water_break_minutes']) && $row['water_break_minutes'] !== '' ? intval($row['water_break_minutes']) : 0;
+
                 $existing = SMM_Competitions::get_by_name($name);
                 if ($existing) {
                     if (!$update_existing) return 'skip';
@@ -127,7 +205,9 @@ class SMM_CSV_Entities {
                         $row['season'] ?? '',
                         $row['age_group'] ?? '',
                         $row['color'] ?? '#0d6efd',
-                        $row['notes'] ?? ''
+                        $row['notes'] ?? '',
+                        $league_id,
+                        $periods, $period_min, $break_min, $half_min, $water_min
                     );
                     return 'updated';
                 }
@@ -138,7 +218,9 @@ class SMM_CSV_Entities {
                     $row['season'] ?? '',
                     $row['age_group'] ?? '',
                     $row['color'] ?? '#0d6efd',
-                    $row['notes'] ?? ''
+                    $row['notes'] ?? '',
+                    $league_id,
+                    $periods, $period_min, $break_min, $half_min, $water_min
                 );
                 return 'added';
             },
@@ -153,6 +235,19 @@ class SMM_CSV_Entities {
                 $name = trim($row['name'] ?? '');
                 if (!$name) return 'skip';
 
+                // Look up / create league
+                $league_id = 0;
+                $league_name = trim($row['league'] ?? '');
+                if ($league_name) {
+                    $l = SMM_Leagues::get_by_name($league_name);
+                    if ($l) {
+                        $league_id = intval($l->id);
+                    } else {
+                        SMM_Leagues::add($league_name);
+                        $league_id = intval($wpdb->insert_id);
+                    }
+                }
+
                 $table = $wpdb->prefix . 'soccer_teams';
                 $existing_id = $wpdb->get_var($wpdb->prepare(
                     "SELECT id FROM $table WHERE team_name = %s", $name
@@ -165,11 +260,11 @@ class SMM_CSV_Entities {
                 if ($existing_id) {
                     if (!$update_existing) return 'skip';
                     $existing = SMM_Teams::get($existing_id);
-                    SMM_Teams::update($existing_id, $name, $existing->team_logo_id, $duration);
+                    SMM_Teams::update($existing_id, $name, $existing->team_logo_id, $duration, $league_id);
                     return 'updated';
                 }
 
-                SMM_Teams::add($name, 0, $duration);
+                SMM_Teams::add($name, 0, $duration, $league_id);
                 return 'added';
             },
         ));
@@ -233,12 +328,7 @@ class SMM_CSV_Entities {
     }
 
     private static function import_generic($file_path, $opts) {
-        $result = array(
-            'added'   => 0,
-            'updated' => 0,
-            'skipped' => 0,
-            'errors'  => array(),
-        );
+        $result = array('added' => 0, 'updated' => 0, 'skipped' => 0, 'errors' => array());
 
         if (!file_exists($file_path)) {
             $result['errors'][] = 'File not found.';

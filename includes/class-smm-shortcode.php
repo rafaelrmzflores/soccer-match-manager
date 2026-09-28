@@ -104,6 +104,7 @@ class SMM_Shortcode {
             'conflicts'     => $conflicts,
             'conflict_msgs' => $messages,
             'has_conflict'  => !empty($conflicts),
+            'time_tbd'      => empty($m->match_time),
             'home_team'     => $home_team,
             'away_team'     => $away_team,
             'loc'           => $loc,
@@ -150,12 +151,17 @@ class SMM_Shortcode {
                     $m = $r['match'];
                     $classes = array('smm-match');
                     if ($r['has_conflict'] && $show_conflicts) $classes[] = 'smm-match--conflict';
+                    if ($r['time_tbd']) $classes[] = 'smm-match--tbd';
                     if ($r['is_canceled'])  $classes[] = 'smm-match--canceled';
                     if ($r['is_postponed']) $classes[] = 'smm-match--postponed';
                     ?>
                     <article class="<?php echo esc_attr(implode(' ', $classes)); ?>">
                         <div class="smm-match__time">
-                            <span class="smm-match__hour"><?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?></span>
+                            <?php if ($r['time_tbd']): ?>
+                                <span class="smm-match__hour smm-tbd">TBD</span>
+                            <?php else: ?>
+                                <span class="smm-match__hour"><?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?></span>
+                            <?php endif; ?>
                             <?php if ($m->match_duration): ?>
                                 <span class="smm-match__duration"><?php echo intval($m->match_duration); ?> min</span>
                             <?php endif; ?>
@@ -255,6 +261,7 @@ class SMM_Shortcode {
                     $m = $r['match'];
                     $classes = array('smm-compact-row');
                     if ($r['has_conflict'] && $show_conflicts) $classes[] = 'smm-compact-row--conflict';
+                    if ($r['time_tbd']) $classes[] = 'smm-compact-row--tbd';
                     if ($r['is_canceled'])  $classes[] = 'smm-compact-row--canceled';
                     if ($r['is_postponed']) $classes[] = 'smm-compact-row--postponed';
                     ?>
@@ -266,7 +273,11 @@ class SMM_Shortcode {
                         <?php endif; ?>
 
                         <span class="smm-compact-row__time">
-                            <?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?>
+                            <?php if ($r['time_tbd']): ?>
+                                <span class="smm-tbd">TBD</span>
+                            <?php else: ?>
+                                <?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?>
+                            <?php endif; ?>
                         </span>
 
                         <span class="smm-compact-row__match">
@@ -316,6 +327,7 @@ class SMM_Shortcode {
                 $m = $r['match'];
                 $classes = array('smm-list-item');
                 if ($r['has_conflict'] && $show_conflicts) $classes[] = 'smm-list-item--conflict';
+                if ($r['time_tbd']) $classes[] = 'smm-list-item--tbd';
                 if ($r['is_canceled'])  $classes[] = 'smm-list-item--canceled';
                 if ($r['is_postponed']) $classes[] = 'smm-list-item--postponed';
                 ?>
@@ -341,7 +353,11 @@ class SMM_Shortcode {
                             <?php echo esc_html(SMM_Helpers::fmt_date($m->match_date)); ?>
                         </span>
                         <span class="smm-list-item__fact">
-                            <?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?>
+                            <?php if ($r['time_tbd']): ?>
+                                <span class="smm-tbd">TBD</span>
+                            <?php else: ?>
+                                <?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?>
+                            <?php endif; ?>
                             <?php if ($m->match_duration): ?>
                                 · <?php echo intval($m->match_duration); ?> min
                             <?php endif; ?>
@@ -395,7 +411,7 @@ class SMM_Shortcode {
 
     public function display_conflicts($atts) {
         $atts = shortcode_atts(array(
-            'view'         => 'cards',   // cards | compact | minimal | by-player
+            'view'         => 'cards',
             'show_players' => 'yes',
         ), $atts);
 
@@ -632,8 +648,7 @@ class SMM_Shortcode {
                     <p class="smm-conflicts__subtitle">
                         <?php echo count($by_player); ?>
                         player<?php echo count($by_player) === 1 ? '' : 's'; ?>
-                        affected —
-                        <?php echo $total_conflicts; ?>
+                        affected — <?php echo $total_conflicts; ?>
                         total conflict<?php echo $total_conflicts === 1 ? '' : 's'; ?>
                     </p>
                 </div>
@@ -642,9 +657,7 @@ class SMM_Shortcode {
             <?php foreach ($by_player as $name => $group): ?>
                 <article class="smm-player-conflict">
                     <header class="smm-player-conflict__head">
-                        <span class="smm-player-conflict__name">
-                            <?php echo esc_html($name); ?>
-                        </span>
+                        <span class="smm-player-conflict__name"><?php echo esc_html($name); ?></span>
                         <span class="smm-player-conflict__count">
                             <?php echo intval($group['count']); ?>
                             conflict<?php echo $group['count'] === 1 ? '' : 's'; ?>
@@ -711,18 +724,9 @@ class SMM_Shortcode {
        HELPERS
        ============================================================ */
 
-    /**
-     * Normalize a conflict record. Handles both the structured array
-     * returned by the v6.2+ conflict checker and legacy string records.
-     */
     private function normalize_conflict($c) {
         if (is_string($c)) {
-            return array(
-                'message'  => $c,
-                'shared'   => '',
-                'maps_url' => '',
-                'type'     => '',
-            );
+            return array('message' => $c, 'shared' => '', 'maps_url' => '', 'type' => '');
         }
         if (!is_array($c)) {
             return array('message' => '', 'shared' => '', 'maps_url' => '', 'type' => '');
@@ -735,19 +739,11 @@ class SMM_Shortcode {
         );
     }
 
-    /**
-     * Strip the "— shared: X" suffix from a conflict message so the
-     * shared players can be rendered separately.
-     */
     private function strip_shared_suffix($msg) {
         if (!is_string($msg) || $msg === '') return '';
         return trim(preg_replace('/—\s*shared:\s*.+$/u', '', $msg), " \t\n\r\0\x0B—-");
     }
 
-    /**
-     * Turn "X.Y km apart" in a conflict message into a Google Maps link.
-     * Escapes the message first, then injects our own trusted anchor.
-     */
     private function linkify_distance($msg, $maps_url) {
         if (!is_string($msg)) $msg = '';
         if (!$maps_url) return esc_html($msg);

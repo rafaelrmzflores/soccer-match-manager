@@ -982,3 +982,56 @@
     .smm-player-conflict__item { padding: 8px 12px; }
     .smm-player-conflict__match { font-size: 13px; }
 }
+/* =====================================================================
+   v7.0 — TBD time indicator
+   ===================================================================== */
+
+.smm-tbd {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--smm-fg-muted, #6b7280);
+    background: var(--smm-bg-subtle, #f7f8fa);
+    border: 1px solid var(--smm-border, #e5e7eb);
+    border-radius: 6px;
+    line-height: 1.3;
+}
+
+/* Compact variant sits inline in tables */
+.smm-compact-row__time .smm-tbd,
+.smm-list-item__fact .smm-tbd {
+    font-size: 11px;
+    padding: 1px 6px;
+}
+
+/* Cards: an upcoming TBD match has a subtle not-quite-ready look */
+.smm-match--tbd .smm-match__hour {
+    color: var(--smm-fg-muted, #6b7280);
+}
+
+/* List item TBD */
+.smm-list-item--tbd {
+    /* inherits from base — TBD is signaled by the inline chip */
+}
+
+/* Compact row TBD */
+.smm-compact-row--tbd .smm-compact-row__time {
+    color: var(--smm-fg-muted, #6b7280);
+}
+
+/* Dark mode adjustments */
+@media (prefers-color-scheme: dark) {
+    .smm-tbd {
+        color: #d1d5db;
+        background: #374151;
+        border-color: #4b5563;
+    }
+}
+.smm-theme-dark .smm-tbd {
+    color: #d1d5db;
+    background: #374151;
+    border-color: #4b5563;
+}

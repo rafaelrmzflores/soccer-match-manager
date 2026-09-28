@@ -2,27 +2,9 @@
 class SMM_Conflict_Checker {
 
     /**
-     * Detect conflicts for a match.
-     *
-     * Returns an array of structured conflict records:
-     *   [
-     *     'other_id'    => int,
-     *     'type'        => 'time_overlap' | 'travel',
-     *     'message'     => string,  // pre-built display string
-     *     'shared'      => string,  // comma-separated player names
-     *     'maps_url'    => string,  // Google Maps directions (travel only)
-     *     'distance_km' => float,   // travel only
-     *     'gap_min'     => int,     // travel only
-     *     'needed_min'  => int,     // travel only
-     *   ]
-     *
-     * Rules (per other match on the same date with shared attending players):
-     *  1. Time overlap — uses match_duration or a 2-hour default.
-     *  2. Different locations only: gap < travel_time + destination buffer.
-     *     (Same-location back-to-back games have no buffer requirement.)
-     *
-     * Only matches with status 'scheduled' or 'confirmed' participate.
-     * Only players with availability 'available' or 'maybe' count.
+     * Detect conflicts for a match. Returns an array of structured
+     * conflict records. Matches without a time set are skipped entirely
+     * (they're treated as "TBD" and cannot be evaluated for overlap or travel).
      */
     public function check_match_conflicts($match_id) {
         global $wpdb;
@@ -30,6 +12,9 @@ class SMM_Conflict_Checker {
 
         $match = SMM_Database::get_match($match_id);
         if (!$match) return array();
+
+        // A match with no time can't participate in conflict detection.
+        if (empty($match->match_time)) return array();
 
         if (!SMM_Helpers::is_conflict_relevant($match->status)) return array();
 
@@ -40,13 +25,17 @@ class SMM_Conflict_Checker {
             "SELECT * FROM $matches_table 
              WHERE match_date = %s 
                AND id != %d
-               AND status IN ('scheduled','confirmed')",
+               AND status IN ('scheduled','confirmed')
+               AND match_time IS NOT NULL",
             $match->match_date, $match_id
         ));
 
         $conflicts = array();
 
         foreach ($others as $other) {
+            // Defensive — the SQL above excludes nulls, but double-check.
+            if (empty($other->match_time)) continue;
+
             $other_players = array_map('intval', SMM_Database::get_attending_player_ids($other->id));
             $shared = array_intersect($my_players, $other_players);
             if (empty($shared)) continue;
@@ -71,6 +60,8 @@ class SMM_Conflict_Checker {
             $start_b = SMM_Helpers::to_ts($other->match_date, $other->match_time);
             $end_b   = $start_b + ($dur_b * 60);
 
+            if ($start_a === null || $start_b === null) continue;
+
             // Rule 1: time overlap
             if (($start_a < $end_b) && ($start_b < $end_a)) {
                 $conflicts[] = array(
@@ -82,7 +73,6 @@ class SMM_Conflict_Checker {
                 continue;
             }
 
-            // Location comparison
             $la = $match->location_id ? SMM_Locations::get($match->location_id) : null;
             $lb = $other->location_id ? SMM_Locations::get($other->location_id) : null;
 
@@ -94,10 +84,8 @@ class SMM_Conflict_Checker {
                 $same_location = true;
             }
 
-            // Same location → no buffer needed
             if ($same_location) continue;
 
-            // Travel check
             if ($la && $lb && $la->latitude !== null && $lb->latitude !== null) {
                 $gap_min = ($start_a >= $end_b)
                     ? ($start_a - $end_b) / 60
@@ -111,13 +99,11 @@ class SMM_Conflict_Checker {
                 $speed = SMM_Helpers::travel_speed_kmh();
                 $travel_min = ($km / max(5, $speed)) * 60 + 5;
 
-                // Only destination buffer applies
                 $destination = ($start_a >= $end_b) ? $lb : $la;
                 $dest_buffer = $destination ? intval($destination->travel_buffer_minutes) : 0;
                 $needed = $travel_min + $dest_buffer;
 
                 if ($gap_min < $needed) {
-                    // Direction of travel: earlier match → later match
                     $earlier = ($start_a < $start_b) ? $la : $lb;
                     $later   = ($start_a < $start_b) ? $lb : $la;
 
@@ -141,17 +127,10 @@ class SMM_Conflict_Checker {
         return $conflicts;
     }
 
-    /**
-     * Build a Google Maps directions URL between two location records.
-     * Prefers coordinates; falls back to address string.
-     * Returns '' if either location lacks enough information.
-     */
     public static function build_maps_url($loc_a, $loc_b) {
         if (!$loc_a || !$loc_b) return '';
-
         $origin      = self::location_query($loc_a);
         $destination = self::location_query($loc_b);
-
         if (!$origin || !$destination) return '';
 
         return add_query_arg(
@@ -175,11 +154,6 @@ class SMM_Conflict_Checker {
         return '';
     }
 
-    /**
-     * Return conflicts across all matches, deduplicated.
-     * Each conflicting pairing appears exactly once, reported from the
-     * earlier match's perspective.
-     */
     public function get_all_conflicts() {
         $matches = SMM_Database::get_matches(array(
             'orderby' => 'match_date, match_time',
@@ -191,6 +165,7 @@ class SMM_Conflict_Checker {
 
         foreach ($matches as $m) {
             if (!SMM_Helpers::is_conflict_relevant($m->status)) continue;
+            if (empty($m->match_time)) continue;
 
             $conflicts = $this->check_match_conflicts($m->id);
             if (empty($conflicts)) continue;
@@ -232,7 +207,8 @@ class SMM_Conflict_Checker {
             "SELECT * FROM $matches_table 
              WHERE match_date = %s 
                AND id != %d
-               AND status IN ('scheduled','confirmed')",
+               AND status IN ('scheduled','confirmed')
+               AND match_time IS NOT NULL",
             $match->match_date, $match->id
         ));
 
@@ -248,28 +224,6 @@ class SMM_Conflict_Checker {
         return null;
     }
 
-    public function count_conflicts() {
-        return count($this->get_all_conflicts());
-    }
-
-    /**
-     * Regroup the conflicts from get_all_conflicts() by shared player.
-     *
-     * Returns:
-     *   array(
-     *     'Rafael Ramirez' => array(
-     *        'player_name' => 'Rafael Ramirez',
-     *        'count'       => 3,
-     *        'conflicts'   => array(
-     *           array('match' => <match row>, 'message' => '...', 'maps_url' => '...', 'type' => 'travel'),
-     *           ...
-     *        ),
-     *     ),
-     *     ...
-     *   )
-     *
-     * Sorted: most conflicts first, then alphabetically by name.
-     */
     public function get_conflicts_by_player() {
         $all = $this->get_all_conflicts();
         $by_player = array();
@@ -283,7 +237,6 @@ class SMM_Conflict_Checker {
                 $shared = trim($c['shared'] ?? '');
                 if (!$shared) continue;
 
-                // A conflict can name multiple shared players — split on comma
                 $names = array_map('trim', explode(',', $shared));
                 foreach ($names as $name) {
                     if (!$name) continue;
@@ -305,7 +258,6 @@ class SMM_Conflict_Checker {
             }
         }
 
-        // Sort: most conflicts first, then alphabetical
         uasort($by_player, function($a, $b) {
             if ($a['count'] === $b['count']) {
                 return strcasecmp($a['player_name'], $b['player_name']);
@@ -314,5 +266,9 @@ class SMM_Conflict_Checker {
         });
 
         return $by_player;
+    }
+
+    public function count_conflicts() {
+        return count($this->get_all_conflicts());
     }
 }

@@ -26,7 +26,8 @@ class SMM_CSV {
             return strtolower(trim(str_replace(' ', '_', $h)));
         }, $header);
 
-        $required = array('date', 'time', 'home_team', 'away_team', 'location');
+        // time is now optional; date is required
+        $required = array('date', 'home_team', 'away_team', 'location');
         foreach ($required as $col) {
             if (!in_array($col, $header, true)) {
                 $result['errors'][] = "Missing required column: $col";
@@ -47,12 +48,12 @@ class SMM_CSV {
             );
 
             $date = self::normalize_date($data['date'] ?? '');
-            $time = self::normalize_time($data['time'] ?? '');
+            $time = self::normalize_time($data['time'] ?? ''); // may be null
             $home = trim($data['home_team'] ?? '');
             $away = trim($data['away_team'] ?? '');
             $loc  = trim($data['location'] ?? '');
 
-            if (!$date || !$time || !$home || !$away || !$loc) {
+            if (!$date || !$home || !$away || !$loc) {
                 $result['skipped']++;
                 $result['errors'][] = "Row $row_num: missing required value(s).";
                 continue;
@@ -63,7 +64,7 @@ class SMM_CSV {
             $loc_id  = self::find_or_create_location($loc);
 
             $duration = null;
-            if (!empty($data['duration'])) {
+            if (isset($data['duration']) && $data['duration'] !== '') {
                 $duration = intval($data['duration']);
                 if ($duration <= 0) $duration = null;
             }
@@ -121,7 +122,7 @@ class SMM_CSV {
 
             fputcsv($out, array(
                 $m->match_date,
-                substr($m->match_time, 0, 5),
+                empty($m->match_time) ? '' : substr($m->match_time, 0, 5),
                 $m->match_duration,
                 $home,
                 $away,
@@ -183,11 +184,14 @@ class SMM_CSV {
         return wp_date('Y-m-d', $ts, SMM_Helpers::tz());
     }
 
+    /**
+     * Returns null when the input is empty (i.e. time is TBD).
+     */
     private static function normalize_time($str) {
         $str = trim($str);
-        if (!$str) return '';
+        if (!$str || strtoupper($str) === 'TBD') return null;
         $ts = strtotime('2000-01-01 ' . $str);
-        if (!$ts) return '';
+        if (!$ts) return null;
         return wp_date('H:i:s', $ts, SMM_Helpers::tz());
     }
 }
