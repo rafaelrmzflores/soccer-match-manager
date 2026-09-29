@@ -123,10 +123,10 @@ class SMM_Helpers {
             return $hr_label;
         }
 
-        return $hr_label . ' and ' . $mins . ' min' . ($mins === 1 ? '' : 's');
+        return $hr_label . ' ' . $mins . ' min' . ($mins === 1 ? '' : 's');
     }
 
-    /**
+        /**
      * Short form: "1h 30m", "2h", "45m".
      */
     public static function fmt_duration_short($minutes) {
