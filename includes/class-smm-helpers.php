@@ -92,4 +92,52 @@ class SMM_Helpers {
         $v = intval(get_option('smm_travel_speed_kmh', 50));
         return $v < 5 ? 50 : $v;
     }
+
+    /**
+     * Format a duration in minutes as "1 hr and 30 mins" style.
+     *
+     * Examples:
+     *   30   → "30 mins"
+     *   60   → "1 hr"
+     *   75   → "1 hr and 15 mins"
+     *   90   → "1 hr and 30 mins"
+     *   120  → "2 hrs"
+     *   145  → "2 hrs and 25 mins"
+     *   0    → ""
+     *   null → ""
+     */
+    public static function fmt_duration($minutes) {
+        $minutes = intval($minutes);
+        if ($minutes <= 0) return '';
+
+        $hrs  = intdiv($minutes, 60);
+        $mins = $minutes % 60;
+
+        if ($hrs === 0) {
+            return $mins . ' min' . ($mins === 1 ? '' : 's');
+        }
+
+        $hr_label = $hrs . ' hr' . ($hrs === 1 ? '' : 's');
+
+        if ($mins === 0) {
+            return $hr_label;
+        }
+
+        return $hr_label . ' and ' . $mins . ' min' . ($mins === 1 ? '' : 's');
+    }
+
+    /**
+     * Short form: "1h 30m", "2h", "45m".
+     */
+    public static function fmt_duration_short($minutes) {
+        $minutes = intval($minutes);
+        if ($minutes <= 0) return '';
+
+        $hrs  = intdiv($minutes, 60);
+        $mins = $minutes % 60;
+
+        if ($hrs === 0) return $mins . 'm';
+        if ($mins === 0) return $hrs . 'h';
+        return $hrs . 'h ' . $mins . 'm';
+    }
 }

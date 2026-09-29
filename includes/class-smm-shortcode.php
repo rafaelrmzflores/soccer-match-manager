@@ -163,7 +163,7 @@ class SMM_Shortcode {
                                 <span class="smm-match__hour"><?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?></span>
                             <?php endif; ?>
                             <?php if ($m->match_duration): ?>
-                                <span class="smm-match__duration"><?php echo intval($m->match_duration); ?> min</span>
+                                <span class="smm-match__duration"><?php echo esc_html(SMM_Helpers::fmt_duration($m->match_duration)); ?></span>
                             <?php endif; ?>
                         </div>
 
@@ -365,7 +365,7 @@ class SMM_Shortcode {
                                 <?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?>
                             <?php endif; ?>
                             <?php if ($m->match_duration): ?>
-                                · <?php echo intval($m->match_duration); ?> min
+                                <span class="smm-match__duration"><?php echo esc_html(SMM_Helpers::fmt_duration($m->match_duration)); ?></span>
                             <?php endif; ?>
                         </span>
                         <?php if ($r['loc_name']): ?>
@@ -493,7 +493,7 @@ class SMM_Shortcode {
                             <span class="smm-conflict-card__time">
                                 <?php echo esc_html(SMM_Helpers::fmt_time($m->match_time)); ?>
                                 <?php if ($m->match_duration): ?>
-                                    <span class="smm-conflict-card__duration">(<?php echo intval($m->match_duration); ?> min)</span>
+                                    <span class="smm-match__duration"><?php echo esc_html(SMM_Helpers::fmt_duration($m->match_duration)); ?></span>
                                 <?php endif; ?>
                             </span>
                         </div>
