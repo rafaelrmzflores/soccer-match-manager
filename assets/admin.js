@@ -323,7 +323,7 @@ jQuery(function ($) {
                     .append(' Primary')
             );
 
-            $row.append('<button type="button" class="button-link smm-venue-remove">Remove</button>');
+            $row.append('<button type="button" class="button smm-venue-remove">Remove</button>');
 
             $container.append($row);
         });

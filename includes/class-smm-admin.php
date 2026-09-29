@@ -1550,7 +1550,7 @@ class SMM_Admin {
                                                     <input type="radio" name="smm_venue_primary" value="0" checked>
                                                     Primary
                                                 </label>
-                                                <button type="button" class="button-link smm-venue-remove">Remove</button>
+                                                <button type="button" class="button smm-venue-remove">Remove</button>
                                             </div>
                                         <?php else:
                                             foreach ($team_venues as $v): ?>
@@ -1570,7 +1570,7 @@ class SMM_Admin {
                                                                <?php checked($v->is_primary, 1); ?>>
                                                         Primary
                                                     </label>
-                                                    <button type="button" class="button-link smm-venue-remove">Remove</button>
+                                                    <button type="button" class="button smm-venue-remove">Remove</button>
                                                 </div>
                                             <?php
                                             $idx++;

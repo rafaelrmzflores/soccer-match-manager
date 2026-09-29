@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Soccer Match Manager
  * Description: Manage soccer matches, teams, players, locations, leagues, and competitions with conflict detection
- * Version: 7.0.0
+ * Version: 7.2.0
  * Author: Rafael Ramírez
  * License: GPL v2 or later
  * Text Domain: soccer-match-manager
