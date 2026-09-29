@@ -204,9 +204,15 @@ class SMM_Shortcode {
                             <?php if ($show_players && !empty($r['attendance'])): ?>
                                 <div class="smm-match__players">
                                     <?php foreach ($r['attendance'] as $a):
-                                        $avail = $a->availability ?? 'available'; ?>
-                                        <span class="smm-chip smm-chip--<?php echo esc_attr($avail); ?>"
-                                              title="<?php echo esc_attr(SMM_Helpers::availabilities()[$avail] ?? $avail); ?>">
+                                        $status = str_replace('_', '-', $a->status ?? 'going');
+                                        $status_label = array(
+                                            'going'     => 'Going',
+                                            'maybe'     => 'Maybe going',
+                                            'not_going' => 'Not going',
+                                        )[$status] ?? $status;
+                                        ?>
+                                        <span class="smm-chip smm-chip-status-<?php echo esc_attr($status); ?>"
+                                            title="<?php echo esc_attr($status_label); ?>">
                                             <?php echo esc_html($a->player_name); ?>
                                         </span>
                                     <?php endforeach; ?>
@@ -383,8 +389,15 @@ class SMM_Shortcode {
                     <?php if ($show_players && !empty($r['attendance'])): ?>
                         <div class="smm-list-item__players">
                             <?php foreach ($r['attendance'] as $a):
-                                $avail = $a->availability ?? 'available'; ?>
-                                <span class="smm-chip smm-chip--<?php echo esc_attr($avail); ?>">
+                                $status = str_replace('_', '-', $a->status ?? 'going');
+                                $status_label = array(
+                                    'going'     => 'Going',
+                                    'maybe'     => 'Maybe going',
+                                    'not_going' => 'Not going',
+                                )[$status] ?? $status;
+                                ?>
+                                <span class="smm-chip smm-chip-status-<?php echo esc_attr($status); ?>"
+                                    title="<?php echo esc_attr($status_label); ?>">
                                     <?php echo esc_html($a->player_name); ?>
                                 </span>
                             <?php endforeach; ?>

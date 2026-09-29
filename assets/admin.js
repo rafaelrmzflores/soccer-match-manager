@@ -26,6 +26,14 @@ jQuery(function ($) {
     });
     frame.open();
   });
+
+  $(document).on("click", ".smm-status-clear", function (e) {
+    e.preventDefault();
+    const line = $(this).closest(".smm-player-status-line");
+    line.find('input[type="radio"]').prop("checked", false);
+    line.data("user-touched", true);
+  });
+
   $(document).on("click", ".smm-remove-logo", function (e) {
     e.preventDefault();
     const wrap = $(this).closest(".smm-logo-picker");
@@ -45,52 +53,57 @@ jQuery(function ($) {
       .split(",")
       .filter(Boolean)
       .map(String);
-    
-      // Parse the primary-location map from the form's data attribute
-      let teamPrimaryLocations = {};
-      try {
-          teamPrimaryLocations = JSON.parse(form.attr('data-team-primary-locations') || '{}');
-      } catch (e) { teamPrimaryLocations = {}; }
 
-      // Track the last auto-filled location so we only override when
-      // the current value came from a previous auto-fill (not a user choice).
-      let lastAutoLocation = null;
+    // Parse the primary-location map from the form's data attribute
+    let teamPrimaryLocations = {};
+    try {
+      teamPrimaryLocations = JSON.parse(
+        form.attr("data-team-primary-locations") || "{}",
+      );
+    } catch (e) {
+      teamPrimaryLocations = {};
+    }
 
-      // Set location to the home team's primary venue.
-      function applyHomeVenue() {
-        const homeId = $('#home_team_id').val();
-        const currentLocation = $('#location_id').val();
-        const primaryLoc = homeId && teamPrimaryLocations[homeId]
-            ? String(teamPrimaryLocations[homeId])
-            : '';
+    // Track the last auto-filled location so we only override when
+    // the current value came from a previous auto-fill (not a user choice).
+    let lastAutoLocation = null;
 
-        if (!primaryLoc) {
-            // No primary venue for this team — leave the location alone
-            lastAutoLocation = null;
-            return;
-        }
+    // Set location to the home team's primary venue.
+    function applyHomeVenue() {
+      const homeId = $("#home_team_id").val();
+      const currentLocation = $("#location_id").val();
+      const primaryLoc =
+        homeId && teamPrimaryLocations[homeId]
+          ? String(teamPrimaryLocations[homeId])
+          : "";
 
-        // Only override if the location is empty, or the current value
-        // is exactly what we auto-filled last time.
-        if (!currentLocation || currentLocation === lastAutoLocation) {
-            $('#location_id').val(primaryLoc);
-            lastAutoLocation = primaryLoc;
-        }
+      if (!primaryLoc) {
+        // No primary venue for this team — leave the location alone
+        lastAutoLocation = null;
+        return;
       }
 
-        // When the user manually picks a location, forget the auto-fill tracking
-        $(document).on('change', '#location_id', function () {
-            // If the change wasn't triggered by applyHomeVenue itself, clear the
-            // auto-fill memory so future home-team changes don't override.
-            if ($(this).val() !== lastAutoLocation) {
-                lastAutoLocation = null;
-            }
-        });
+      // Only override if the location is empty, or the current value
+      // is exactly what we auto-filled last time.
+      if (!currentLocation || currentLocation === lastAutoLocation) {
+        $("#location_id").val(primaryLoc);
+        lastAutoLocation = primaryLoc;
+      }
+    }
 
-        $(document).on('change', '#home_team_id', applyHomeVenue);
+    // When the user manually picks a location, forget the auto-fill tracking
+    $(document).on("change", "#location_id", function () {
+      // If the change wasn't triggered by applyHomeVenue itself, clear the
+      // auto-fill memory so future home-team changes don't override.
+      if ($(this).val() !== lastAutoLocation) {
+        lastAutoLocation = null;
+      }
+    });
 
-        // Run once on page load (only auto-fills if location is empty)
-        applyHomeVenue();
+    $(document).on("change", "#home_team_id", applyHomeVenue);
+
+    // Run once on page load (only auto-fills if location is empty)
+    applyHomeVenue();
 
     // Rebuild a <select>'s options from a list of teams.
     // "My teams" (in myTeamIds) sort first, then alphabetical.
@@ -224,29 +237,58 @@ jQuery(function ($) {
       .trigger("change");
   }
 
-  /* ---- Auto-check players based on selected teams ---- */
+  // Bulk-set all players to Going
+  $(document).on("click", ".smm-set-all-going", function (e) {
+    e.preventDefault();
+    $('.smm-player-status-line input[value="going"]').prop("checked", true);
+  });
+
   function refreshAutoPlayers() {
     const homeId = $("#home_team_id").val();
     const awayId = $("#away_team_id").val();
     const teamIds = [homeId, awayId].filter(Boolean).map(String);
-    $(".smm-player-line").each(function () {
+
+    $(".smm-player-status-line").each(function () {
       const line = $(this);
-      const checkbox = line.find('input[type="checkbox"]');
-      const playerTeam = String(checkbox.data("team"));
-      const matchesTeam = teamIds.indexOf(playerTeam) !== -1;
-      if (matchesTeam) {
-        if (!checkbox.data("user-touched")) checkbox.prop("checked", true);
+      const playerTeam = String(line.data("team"));
+      const isOnPlayingTeam = teamIds.indexOf(playerTeam) !== -1;
+
+      const $going = line.find('input[value="going"]');
+      const $maybe = line.find('input[value="maybe"]');
+      const $notGoing = line.find('input[value="not_going"]');
+
+      if (isOnPlayingTeam) {
+        // Default to Going only if the user hasn't chosen anything else
+        if (!$maybe.is(":checked") && !$notGoing.is(":checked")) {
+          $going.prop("checked", true);
+        }
         line.addClass("smm-auto-checked");
       } else {
+        // Player is not on either team.
+        // Clear the auto-selected Going, but respect an explicit user choice.
+        if (line.data("user-touched")) {
+          // Leave alone — user made a decision
+        } else {
+          // Was auto-set to Going and shouldn't be; clear it
+          if (
+            $going.is(":checked") &&
+            !$maybe.is(":checked") &&
+            !$notGoing.is(":checked")
+          ) {
+            $going.prop("checked", false);
+          }
+        }
         line.removeClass("smm-auto-checked");
       }
     });
   }
+
+  // Mark lines the user has touched, so we never override their choice
   $(document).on(
     "change",
-    '.smm-player-line input[type="checkbox"]',
+    '.smm-player-status-line input[type="radio"]',
     function () {
-      $(this).data("user-touched", true);
+      $(this).closest(".smm-player-status-line").data("user-touched", true);
     },
   );
   $(document).on("change", ".smm-team-select", refreshAutoPlayers);
@@ -293,46 +335,51 @@ jQuery(function ($) {
     refreshComputed();
   }
 
-      /* ============================================================
+  /* ============================================================
        TEAM FORM — venue rows
        ============================================================ */
 
-    if ($('#smm-team-venues').length) {
-        const $container = $('#smm-team-venues');
+  if ($("#smm-team-venues").length) {
+    const $container = $("#smm-team-venues");
 
-        // Add a new empty row
-        $(document).on('click', '#smm-add-venue', function (e) {
-            e.preventDefault();
-            const idx = $container.find('.smm-venue-row').length;
+    // Add a new empty row
+    $(document).on("click", "#smm-add-venue", function (e) {
+      e.preventDefault();
+      const idx = $container.find(".smm-venue-row").length;
 
-            const $row = $('<div class="smm-venue-row"></div>');
+      const $row = $('<div class="smm-venue-row"></div>');
 
-            // Build the <select> by cloning options from an existing row
-            const $firstSelect = $container.find('.smm-venue-select').first();
-            if ($firstSelect.length) {
-                const $clone = $firstSelect.clone().val('');
-                $clone.attr('name', 'venue[' + idx + '][location_id]');
-                $row.append($clone);
-            } else {
-                $row.append('<select name="venue[' + idx + '][location_id]" class="smm-venue-select"><option value="">— Select —</option></select>');
-            }
+      // Build the <select> by cloning options from an existing row
+      const $firstSelect = $container.find(".smm-venue-select").first();
+      if ($firstSelect.length) {
+        const $clone = $firstSelect.clone().val("");
+        $clone.attr("name", "venue[" + idx + "][location_id]");
+        $row.append($clone);
+      } else {
+        $row.append(
+          '<select name="venue[' +
+            idx +
+            '][location_id]" class="smm-venue-select"><option value="">— Select —</option></select>',
+        );
+      }
 
-            $row.append(
-                $('<label class="smm-venue-primary"></label>')
-                    .append($('<input type="radio" name="smm_venue_primary">').val(idx))
-                    .append(' Primary')
-            );
+      $row.append(
+        $('<label class="smm-venue-primary"></label>')
+          .append($('<input type="radio" name="smm_venue_primary">').val(idx))
+          .append(" Primary"),
+      );
 
-            $row.append('<button type="button" class="button smm-venue-remove">Remove</button>');
+      $row.append(
+        '<button type="button" class="button smm-venue-remove">Remove</button>',
+      );
 
-            $container.append($row);
-        });
+      $container.append($row);
+    });
 
-        // Remove a row
-        $(document).on('click', '.smm-venue-remove', function (e) {
-            e.preventDefault();
-            $(this).closest('.smm-venue-row').remove();
-        });
-    }
-  
+    // Remove a row
+    $(document).on("click", ".smm-venue-remove", function (e) {
+      e.preventDefault();
+      $(this).closest(".smm-venue-row").remove();
+    });
+  }
 });

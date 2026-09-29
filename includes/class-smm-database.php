@@ -113,11 +113,13 @@ class SMM_Database {
             match_id mediumint(9) NOT NULL,
             player_id mediumint(9) NOT NULL,
             attending tinyint(1) DEFAULT 1,
+            status varchar(20) NOT NULL DEFAULT 'going',
             auto_added tinyint(1) DEFAULT 0,
             PRIMARY KEY (id),
             UNIQUE KEY match_player (match_id, player_id),
             KEY match_id (match_id),
-            KEY player_id (player_id)
+            KEY player_id (player_id),
+            KEY status (status)
         ) $charset_collate;";
 
         $sql_team_locations = "CREATE TABLE $team_locations (
@@ -150,6 +152,7 @@ class SMM_Database {
         $wpdb->query("UPDATE $competitions SET halftime_minutes = 15 WHERE halftime_minutes IS NULL");
         $wpdb->query("UPDATE $competitions SET water_break_minutes = 0 WHERE water_break_minutes IS NULL");
         $wpdb->query("UPDATE $leagues SET logo_id = 0 WHERE logo_id IS NULL");
+        $wpdb->query("UPDATE $attendance SET status = 'going' WHERE status IS NULL OR status = ''");
 
         // Legacy migrations
         self::migrate_legacy_competitions();
@@ -308,6 +311,10 @@ class SMM_Database {
         return $wpdb->delete($wpdb->prefix . 'soccer_matches', array('id' => $id), array('%d'));
     }
 
+        /**
+     * Returns all attendance rows for a match, joined with player + team info.
+     * Sorted so going → maybe → not_going appear in a stable order.
+     */
     public static function get_attendance($match_id) {
         global $wpdb;
         $att = $wpdb->prefix . 'soccer_attendance';
@@ -315,54 +322,95 @@ class SMM_Database {
         $tm  = $wpdb->prefix . 'soccer_teams';
 
         return $wpdb->get_results($wpdb->prepare(
-            "SELECT a.*, p.player_name, p.team_id, p.availability, t.team_name, t.team_logo_id
+            "SELECT a.*, p.player_name, p.team_id, p.availability,
+                    t.team_name, t.team_logo_id
              FROM $att a
              JOIN $pl p ON p.id = a.player_id
              LEFT JOIN $tm t ON t.id = p.team_id
-             WHERE a.match_id = %d", $match_id
+             WHERE a.match_id = %d
+             ORDER BY 
+                FIELD(a.status, 'going', 'maybe', 'not_going'),
+                p.player_name ASC",
+            $match_id
         ));
     }
 
+    /**
+     * Player IDs on a match that count for conflict detection.
+     * Only 'going' and 'maybe' count — 'not_going' players are excluded,
+     * as are players whose own availability is 'unavailable' or 'injured'.
+     */
     public static function get_attending_player_ids($match_id) {
         global $wpdb;
         $att = $wpdb->prefix . 'soccer_attendance';
         $pl  = $wpdb->prefix . 'soccer_players';
 
         return $wpdb->get_col($wpdb->prepare(
-            "SELECT a.player_id 
+            "SELECT a.player_id
              FROM $att a
              JOIN $pl p ON p.id = a.player_id
-             WHERE a.match_id = %d 
-               AND a.attending = 1
-               AND p.availability IN ('available','maybe')", $match_id
+             WHERE a.match_id = %d
+               AND a.status IN ('going', 'maybe')
+               AND p.availability IN ('available', 'maybe')",
+            $match_id
         ));
     }
 
-    public static function set_attendance($match_id, $player_ids, $auto_player_ids = array()) {
+    /**
+     * Save attendance for a match.
+     *
+     * $attendance is an array of ['player_id' => int, 'status' => 'going'|'maybe'|'not_going']
+     * $auto_player_ids is a list of player IDs auto-added from team rosters —
+     * they get status 'going' unless already set explicitly.
+     *
+     * Only 'not_going' rows keep their exclusion; every other state counts.
+     */
+    public static function set_attendance($match_id, $attendance = array(), $auto_player_ids = array()) {
         global $wpdb;
         $table = $wpdb->prefix . 'soccer_attendance';
+        $match_id = intval($match_id);
 
+        // Clear existing
         $wpdb->delete($table, array('match_id' => $match_id), array('%d'));
 
-        $manual = array_map('intval', $player_ids);
-        $auto   = array_map('intval', $auto_player_ids);
+        // Normalize: player_id => status
+        $by_player = array();
+        foreach ((array) $attendance as $row) {
+            if (is_array($row)) {
+                $pid = intval($row['player_id'] ?? 0);
+                $status = self::sanitize_attendance_status($row['status'] ?? 'going');
+            } else {
+                // Backward-compat: bare player IDs from old callers
+                $pid = intval($row);
+                $status = 'going';
+            }
+            if ($pid) $by_player[$pid] = $status;
+        }
 
-        foreach (array_unique($manual) as $pid) {
+        // Auto-added players get 'going' unless already in the map
+        foreach ((array) $auto_player_ids as $pid) {
+            $pid = intval($pid);
+            if ($pid && !isset($by_player[$pid])) {
+                $by_player[$pid] = 'going';
+            }
+        }
+
+        // Insert
+        foreach ($by_player as $pid => $status) {
             $wpdb->insert($table, array(
-                'match_id'   => intval($match_id),
+                'match_id'   => $match_id,
                 'player_id'  => $pid,
-                'attending'  => 1,
-                'auto_added' => 0,
+                'attending'  => $status === 'not_going' ? 0 : 1, // legacy mirror
+                'status'     => $status,
+                'auto_added' => in_array($pid, array_map('intval', (array) $auto_player_ids), true) ? 1 : 0,
             ));
         }
-        foreach (array_unique($auto) as $pid) {
-            if (in_array($pid, $manual, true)) continue;
-            $wpdb->insert($table, array(
-                'match_id'   => intval($match_id),
-                'player_id'  => $pid,
-                'attending'  => 1,
-                'auto_added' => 1,
-            ));
-        }
+    }
+
+    private static function sanitize_attendance_status($status) {
+        $status = sanitize_key($status);
+        return in_array($status, array('going', 'maybe', 'not_going'), true)
+            ? $status
+            : 'going';
     }
 }

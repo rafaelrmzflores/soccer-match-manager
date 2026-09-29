@@ -647,3 +647,87 @@
   cursor: help;
   vertical-align: middle;
 }
+/* =====================================================================
+   Per-player attendance status (going / maybe / not_going)
+   ===================================================================== */
+
+.smm-players-status {
+  max-height: 520px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  padding: 12px;
+  border-radius: 4px;
+  background: #fafafa;
+  max-width: 620px;
+}
+
+.smm-player-group {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px dashed #e0e0e0;
+}
+.smm-player-group:last-child {
+  border-bottom: none;
+}
+
+.smm-player-status-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 6px 4px 12px;
+  border-radius: 4px;
+}
+.smm-player-status-line.smm-auto-checked {
+  background: #f3faf5;
+}
+
+.smm-player-name {
+  font-size: 13px;
+  color: #1f2937;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+}
+
+.smm-status-radios {
+  display: inline-flex;
+  gap: 10px;
+  flex: 0 0 auto;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.smm-status-radios label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  user-select: none;
+}
+.smm-status-radios input[type="radio"] {
+  margin: 0;
+}
+
+.smm-status-going {
+  color: #166534;
+} /* green */
+.smm-status-maybe {
+  color: #6b7280;
+} /* gray */
+.smm-status-not-going {
+  color: #991b1b;
+} /* red */
+
+.smm-set-all-going {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.smm-status-unset {
+  color: #9ca3af;
+  font-size: 12px;
+  margin-left: 6px;
+  cursor: help;
+}

@@ -466,11 +466,19 @@ class SMM_Admin {
     }
 
     private function save_attendance_from_post($match_id, $home_id, $away_id) {
-        $manual = isset($_POST['attending_players'])
-            ? array_map('intval', (array) $_POST['attending_players'])
-            : array();
+        // Format from the form: attendance[player_id] = going|maybe|not_going
+        $attendance = array();
+        if (isset($_POST['attendance']) && is_array($_POST['attendance'])) {
+            foreach ($_POST['attendance'] as $pid => $status) {
+                $attendance[] = array(
+                    'player_id' => intval($pid),
+                    'status'    => sanitize_key($status),
+                );
+            }
+        }
+
         $auto = $this->get_auto_attending_players($home_id, $away_id);
-        SMM_Database::set_attendance($match_id, $manual, $auto);
+        SMM_Database::set_attendance($match_id, $attendance, $auto);
     }
 
     private function get_auto_attending_players($home_team_id, $away_team_id) {
@@ -1032,36 +1040,97 @@ class SMM_Admin {
                         <th>Attending Players</th>
                         <td>
                             <p class="description smm-auto-note">
-                                ✓ Players from the selected teams are auto-selected.
-                                Uncheck to exclude, or add others manually.
+                                ✓ Players from the selected teams are auto-set to <strong>Going</strong>.
+                                Change any to Maybe or Not going as needed.
+                                <button type="button" class="button button-small smm-set-all-going">
+                                    Set all to Going
+                                </button>
                             </p>
-                            <fieldset class="smm-players-checkboxes">
+                            <fieldset class="smm-players-status">
                                 <?php if (empty($players)): ?>
                                     <em>No active players yet.</em>
                                 <?php else:
+                                    // Index current status by player_id
+                                    $status_by_player = array();
+                                    if ($match) {
+                                        foreach (SMM_Database::get_attendance($match->id) as $a) {
+                                            $status_by_player[intval($a->player_id)] = $a->status;
+                                        }
+                                    }
+
+                                    // Group players by team
                                     $grouped = array();
                                     foreach ($players as $p) {
                                         $key = $p->team_name ?: '— No team —';
                                         $grouped[$key][] = $p;
                                     }
+
+                                    $home_team_id = $match ? intval($match->home_team_id) : 0;
+                                    $away_team_id = $match ? intval($match->away_team_id) : 0;
+
                                     foreach ($grouped as $team_name => $team_players): ?>
                                         <div class="smm-player-group">
                                             <strong><?php echo esc_html($team_name); ?></strong>
                                             <?php foreach ($team_players as $p):
+                                                $pid = intval($p->id);
                                                 $avail_label = SMM_Helpers::availabilities()[$p->availability] ?? $p->availability;
+
+                                                // Determine current status:
+                                                if (isset($status_by_player[$pid])) {
+                                                    // 1. Saved status wins — this is an edit of an existing match
+                                                    $cur = $status_by_player[$pid];
+                                                } elseif ($p->team_id
+                                                        && (intval($p->team_id) === $home_team_id
+                                                            || intval($p->team_id) === $away_team_id)) {
+                                                    // 2. Auto-default to Going only for players on the two playing teams
+                                                    $cur = 'going';
+                                                } else {
+                                                    // 3. Not on either team and no saved status — leave unmarked
+                                                    $cur = '';
+                                                }
                                                 ?>
-                                                <label class="smm-player-line"
-                                                       data-team="<?php echo intval($p->team_id); ?>"
-                                                       style="display:block;margin:4px 0 4px 12px;">
-                                                    <input type="checkbox" name="attending_players[]"
-                                                           value="<?php echo $p->id; ?>"
-                                                           data-team="<?php echo intval($p->team_id); ?>"
-                                                           <?php checked(in_array($p->id, $selected)); ?>>
-                                                    <?php echo esc_html($p->player_name); ?>
-                                                    <small class="smm-avail smm-avail-<?php echo esc_attr($p->availability); ?>">
-                                                        (<?php echo esc_html($avail_label); ?>)
-                                                    </small>
-                                                </label>
+                                                <div class="smm-player-status-line"
+                                                     data-team="<?php echo intval($p->team_id); ?>">
+                                                    <span class="smm-player-name">
+                                                        <?php echo esc_html($p->player_name); ?>
+                                                        <small class="smm-avail smm-avail-<?php echo esc_attr($p->availability); ?>">
+                                                            (<?php echo esc_html($avail_label); ?>)
+                                                        </small>
+                                                    </span>
+                                                    <span class="smm-status-radios">
+                                                        <label class="smm-status-going">
+                                                            <input type="radio"
+                                                                   name="attendance[<?php echo $pid; ?>]"
+                                                                   value="going"
+                                                                   data-team="<?php echo intval($p->team_id); ?>"
+                                                                   <?php checked($cur, 'going'); ?>>
+                                                            Going
+                                                        </label>
+                                                        <label class="smm-status-maybe">
+                                                            <input type="radio"
+                                                                   name="attendance[<?php echo $pid; ?>]"
+                                                                   value="maybe"
+                                                                   data-team="<?php echo intval($p->team_id); ?>"
+                                                                   <?php checked($cur, 'maybe'); ?>>
+                                                            Maybe
+                                                        </label>
+                                                        <label class="smm-status-not-going">
+                                                            <input type="radio"
+                                                                   name="attendance[<?php echo $pid; ?>]"
+                                                                   value="not_going"
+                                                                   data-team="<?php echo intval($p->team_id); ?>"
+                                                                   <?php checked($cur, 'not_going'); ?>>
+                                                            Not going
+                                                        </label>
+                                                        <button type="button" class="button-link smm-status-clear" title="Clear status">×</button>
+                                                    </span>
+                                                    <!-- <span class="smm-status-radios">
+                                                        <button type="button" class="button-link smm-status-clear" title="Clear status">×</button>
+                                                    </span> -->
+                                                    <!-- <?php if ($cur === ''): ?>
+                                                        <span class="smm-status-unset" title="Not on either team — mark explicitly if attending">—</span>
+                                                    <?php endif; ?> -->
+                                                </div>
                                             <?php endforeach; ?>
                                         </div>
                                     <?php endforeach;
