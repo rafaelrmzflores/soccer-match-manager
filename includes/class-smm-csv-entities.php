@@ -65,13 +65,23 @@ class SMM_CSV_Entities {
     public static function export_teams() {
         $rows = SMM_Teams::get_all();
         return self::to_csv(
-            array('name','league','default_duration'),
+            array('name','league','default_duration','venues'),
             array_map(function($t) {
                 $league_name = $t->league_id ? SMM_Leagues::get_name($t->league_id) : '';
+
+                // Serialize venues as Name|Name|Name — primary marked with *
+                $venues = SMM_Teams::get_venues($t->id);
+                $parts = array();
+                foreach ($venues as $v) {
+                    $parts[] = ($v->is_primary ? '*' : '') . $v->location_name;
+                }
+                $venues_str = implode('|', $parts);
+
                 return array(
                     $t->team_name,
                     $league_name,
                     $t->default_duration,
+                    $venues_str,
                 );
             }, $rows)
         );
@@ -235,7 +245,7 @@ class SMM_CSV_Entities {
                 $name = trim($row['name'] ?? '');
                 if (!$name) return 'skip';
 
-                // Look up / create league
+                // League: find-or-create
                 $league_id = 0;
                 $league_name = trim($row['league'] ?? '');
                 if ($league_name) {
@@ -257,15 +267,57 @@ class SMM_CSV_Entities {
                     ? intval($row['default_duration']) : null;
                 if ($duration !== null && $duration <= 0) $duration = null;
 
+                $team_id = 0;
                 if ($existing_id) {
                     if (!$update_existing) return 'skip';
                     $existing = SMM_Teams::get($existing_id);
                     SMM_Teams::update($existing_id, $name, $existing->team_logo_id, $duration, $league_id);
-                    return 'updated';
+                    $team_id = intval($existing_id);
+                } else {
+                    SMM_Teams::add($name, 0, $duration, $league_id);
+                    $team_id = intval($wpdb->insert_id);
                 }
 
-                SMM_Teams::add($name, 0, $duration, $league_id);
-                return 'added';
+                // Venues: parse "Name|*PrimaryName|OtherName"
+                if ($team_id && isset($row['venues']) && trim($row['venues']) !== '') {
+                    $venue_names = array_filter(array_map('trim', explode('|', $row['venues'])));
+                    $venue_rows = array();
+                    foreach ($venue_names as $vn) {
+                        $is_primary = false;
+                        if (strpos($vn, '*') === 0) {
+                            $is_primary = true;
+                            $vn = trim(substr($vn, 1));
+                        }
+                        if (!$vn) continue;
+
+                        $loc = self::find_location($vn);
+                        $loc_id = 0;
+                        if ($loc) {
+                            $loc_id = intval($loc->id);
+                        } else {
+                            // Auto-create missing locations
+                            SMM_Locations::add($vn, '', null, null, 30);
+                            $loc_id = intval($wpdb->insert_id);
+                        }
+                        if ($loc_id) {
+                            $venue_rows[] = array(
+                                'location_id' => $loc_id,
+                                'is_primary'  => $is_primary,
+                            );
+                        }
+                    }
+                    if (!empty($venue_rows)) {
+                        SMM_Teams::set_venues($team_id, $venue_rows);
+                    }
+                } elseif ($team_id && $existing_id) {
+                    // Row has no venues column (legacy CSV) — leave existing venues alone.
+                    // Only clear venues if the column is explicitly present but empty.
+                    if (array_key_exists('venues', $row) && trim($row['venues']) === '') {
+                        SMM_Teams::set_venues($team_id, array());
+                    }
+                }
+
+                return $existing_id ? 'updated' : 'added';
             },
         ));
     }

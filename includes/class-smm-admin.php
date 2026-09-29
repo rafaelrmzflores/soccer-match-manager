@@ -1602,12 +1602,15 @@ class SMM_Admin {
                     <table class="wp-list-table widefat fixed striped">
                         <thead><tr>
                             <th style="width:60px;">Logo</th><th>Team Name</th><th>League</th>
+                            <th>Home Venues</th>
                             <th>Default Duration</th><th>Actions</th>
                         </tr></thead>
                         <tbody>
                         <?php if (empty($teams)): ?>
-                            <tr><td colspan="5">No teams yet.</td></tr>
-                        <?php else: foreach ($teams as $t): ?>
+                            <tr><td colspan="6">No teams yet.</td></tr>
+                        <?php else: foreach ($teams as $t):
+                            $venues = SMM_Teams::get_venues($t->id);
+                            ?>
                             <tr>
                                 <td><?php echo SMM_Teams::get_logo_html($t, array(40,40)); ?></td>
                                 <td><?php echo esc_html($t->team_name); ?></td>
@@ -1616,6 +1619,39 @@ class SMM_Admin {
                                         <?php echo SMM_Leagues::badge_html($t->league_id); ?>
                                     <?php else: ?>
                                         —
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if (empty($venues)): ?>
+                                        —
+                                    <?php else:
+                                        $primary = null;
+                                        $extras = 0;
+                                        foreach ($venues as $v) {
+                                            if ($v->is_primary && !$primary) {
+                                                $primary = $v;
+                                            } elseif (!$v->is_primary) {
+                                                $extras++;
+                                            }
+                                        }
+                                        // Fallback: if no row is marked primary, use the first
+                                        if (!$primary) $primary = $venues[0];
+                                        ?>
+                                        <?php echo esc_html($primary->location_name); ?>
+                                        <?php if ($extras > 0): ?>
+                                            <span class="smm-venue-count"
+                                                  title="<?php
+                                                    $names = array();
+                                                    foreach ($venues as $v) {
+                                                        if ($v->link_id !== $primary->link_id) {
+                                                            $names[] = $v->location_name;
+                                                        }
+                                                    }
+                                                    echo esc_attr('Also: ' . implode(', ', $names));
+                                                  ?>">
+                                                +<?php echo intval($extras); ?>
+                                            </span>
+                                        <?php endif; ?>
                                     <?php endif; ?>
                                 </td>
                                 <td><?php echo $t->default_duration ? intval($t->default_duration) . ' min' : '—'; ?></td>
@@ -1920,7 +1956,7 @@ class SMM_Admin {
                     'leagues'      => array('Leagues', 'name, season, age_group, color, notes'),
                     'locations'    => array('Locations', 'name, address, latitude, longitude, travel_buffer_minutes'),
                     'competitions' => array('Competitions', 'name, league, short_label, season, age_group, color, periods, period_minutes, break_minutes, halftime_minutes, water_break_minutes, notes'),
-                    'teams'        => array('Teams', 'name, league, default_duration'),
+                    'teams'        => array('Teams', 'name, league, default_duration, venues (*primary|other)'),
                     'players'      => array('Players', 'name, email, team, availability, is_active'),
                     'matches'      => array('Matches', 'date, time, duration, home_team, away_team, location, status, competition, round, notes'),
                 );
