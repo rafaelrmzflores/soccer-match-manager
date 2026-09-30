@@ -185,10 +185,18 @@ class SMM_Shortcode {
                             </div>
 
                             <div class="smm-match__meta">
-                                <?php if ($r['loc_name']): ?>
+                                <?php if ($r['loc_name']):
+                                    $loc_url = $r['loc'] ? SMM_Helpers::get_maps_search_url($r['loc']) : '';
+                                    ?>
                                     <span class="smm-meta-item">
                                         <span class="smm-meta-icon">📍</span>
-                                        <?php echo esc_html($r['loc_name']); ?>
+                                        <?php if ($loc_url): ?>
+                                            <a href="<?php echo esc_url($loc_url); ?>"
+                                            target="_blank" rel="noopener noreferrer"
+                                            class="smm-maps-link"><?php echo esc_html($r['loc_name']); ?></a>
+                                        <?php else: ?>
+                                            <?php echo esc_html($r['loc_name']); ?>
+                                        <?php endif; ?>
                                     </span>
                                 <?php endif; ?>
                                 <?php if ($r['comp']): ?>
@@ -368,10 +376,18 @@ class SMM_Shortcode {
                                 <span class="smm-match__duration"><?php echo esc_html(SMM_Helpers::fmt_duration($m->match_duration)); ?></span>
                             <?php endif; ?>
                         </span>
-                        <?php if ($r['loc_name']): ?>
+                        <?php if ($r['loc_name']):
+                            $loc_url = $r['loc'] ? SMM_Helpers::get_maps_search_url($r['loc']) : '';
+                            ?>
                             <span class="smm-list-item__fact">
                                 <span class="smm-meta-icon">📍</span>
-                                <?php echo esc_html($r['loc_name']); ?>
+                                <?php if ($loc_url): ?>
+                                    <a href="<?php echo esc_url($loc_url); ?>"
+                                    target="_blank" rel="noopener noreferrer"
+                                    class="smm-maps-link"><?php echo esc_html($r['loc_name']); ?></a>
+                                <?php else: ?>
+                                    <?php echo esc_html($r['loc_name']); ?>
+                                <?php endif; ?>
                             </span>
                         <?php endif; ?>
                         <?php if ($r['comp']): ?>

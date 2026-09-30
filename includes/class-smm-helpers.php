@@ -140,4 +140,32 @@ class SMM_Helpers {
         if ($mins === 0) return $hrs . 'h';
         return $hrs . 'h ' . $mins . 'm';
     }
+
+    /**
+     * Build a Google Maps search URL for a single location.
+     * Prefers coordinates; falls back to address, then to the name.
+     * Returns '' if the location has no usable query at all.
+     *
+     * @param object|null $location  A row from SMM_Locations::get()/get_all()
+     * @return string
+     */
+    public static function get_maps_search_url($location) {
+        if (!$location) return '';
+
+        $query = '';
+        if (isset($location->latitude, $location->longitude)
+            && $location->latitude !== null
+            && $location->longitude !== null) {
+            $query = $location->latitude . ',' . $location->longitude;
+        } elseif (!empty($location->location_address)) {
+            $query = $location->location_address;
+        }
+
+        if (!$query) return '';
+
+        return add_query_arg(
+            array('api' => '1', 'query' => $query),
+            'https://www.google.com/maps/search/'
+        );
+    }
 }
