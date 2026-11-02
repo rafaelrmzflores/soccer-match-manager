@@ -168,4 +168,22 @@ class SMM_Helpers {
             'https://www.google.com/maps/search/'
         );
     }
+
+    /**
+     * Format a date with the day of the week (e.g., "Saturday, Sep 26, 2026").
+     */
+    public static function fmt_date_with_day($ymd) {
+        if (empty($ymd)) return '';
+        $ts = strtotime($ymd . ' 00:00:00');
+        return $ts ? wp_date('l, M j, Y', $ts) : $ymd;
+    }
+
+    /**
+     * Format a date with the day of the week (e.g., "Saturday, Sep 26, 2026").
+     */
+    public static function fmt_date_with_day_short($ymd) {
+        if (empty($ymd)) return '';
+        $ts = strtotime($ymd . ' 00:00:00');
+        return $ts ? wp_date('D, M j, Y', $ts) : $ymd;
+    }
 }

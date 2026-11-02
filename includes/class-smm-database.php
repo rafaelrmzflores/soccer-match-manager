@@ -87,7 +87,7 @@ class SMM_Database {
         $sql_matches = "CREATE TABLE $matches (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             match_date date NOT NULL,
-            match_time time DEFAULT NULL,
+            match_time time NULL DEFAULT NULL,
             match_duration smallint DEFAULT NULL,
             home_team_id mediumint(9) DEFAULT 0,
             away_team_id mediumint(9) DEFAULT 0,
@@ -143,6 +143,11 @@ class SMM_Database {
         dbDelta($sql_attendance);
         dbDelta($sql_team_locations);
 
+        // dbDelta does not reliably apply nullability-only changes.
+        // Force the match_time column to be nullable once, guarded so it
+        // only runs if the column isn't already nullable.
+        self::ensure_match_time_nullable();
+
         // Backfill defaults
         $wpdb->query("UPDATE $matches SET status = 'scheduled' WHERE status IS NULL OR status = ''");
         $wpdb->query("UPDATE $players SET availability = 'available' WHERE availability IS NULL OR availability = ''");
@@ -156,6 +161,33 @@ class SMM_Database {
 
         // Legacy migrations
         self::migrate_legacy_competitions();
+    }
+
+    /**
+     * dbDelta silently ignores MODIFY clauses that only change NULLability.
+     * This method inspects the current schema and issues a direct ALTER TABLE
+     * once, so TBD matches can actually be stored as NULL.
+     */
+    private static function ensure_match_time_nullable() {
+        global $wpdb;
+        $table = $wpdb->prefix . 'soccer_matches';
+
+        $col = $wpdb->get_row($wpdb->prepare(
+            "SHOW COLUMNS FROM `$table` LIKE %s", 'match_time'
+        ));
+        if (!$col) return; // table missing — nothing to do
+
+        // Already nullable — nothing to do
+        if (strtoupper($col->Null) === 'YES') return;
+
+        // Force the change
+        $wpdb->query("ALTER TABLE `$table` MODIFY `match_time` TIME NULL DEFAULT NULL");
+
+        if ($wpdb->last_error) {
+            error_log('[SMM] Could not make match_time nullable: ' . $wpdb->last_error);
+        } else {
+            error_log('[SMM] match_time column changed to NULL-able.');
+        }
     }
 
     private static function migrate_legacy_competitions() {

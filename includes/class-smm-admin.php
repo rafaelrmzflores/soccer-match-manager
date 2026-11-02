@@ -765,7 +765,7 @@ class SMM_Admin {
                         ?>
                         <tr class="<?php echo !empty($conflicts) ? 'smm-has-conflict' : ''; ?>">
                             <td><input type="checkbox" name="match_ids[]" value="<?php echo $m->id; ?>"></td>
-                            <td><?php echo esc_html(SMM_Helpers::fmt_date($m->match_date)); ?></td>
+                            <td><?php echo esc_html(SMM_Helpers::fmt_date_with_day_short($m->match_date)); ?></td>
                             <td>
                                 <?php if (empty($m->match_time)): ?>
                                     <span class="smm-tbd">TBD</span>

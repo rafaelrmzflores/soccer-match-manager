@@ -138,7 +138,7 @@ class SMM_Shortcode {
             <?php foreach ($grouped as $date => $day_rows): ?>
                 <?php if ($group_by_day && $date): ?>
                     <div class="smm-day-heading">
-                        <span class="smm-day-name"><?php echo esc_html(SMM_Helpers::fmt_date($date)); ?></span>
+                        <span class="smm-day-name"><?php echo esc_html(SMM_Helpers::fmt_date_with_day($date)); ?></span>
                         <span class="smm-day-count">
                             <?php echo count($day_rows); ?>
                             match<?php echo count($day_rows) === 1 ? '' : 'es'; ?>
@@ -263,7 +263,7 @@ class SMM_Shortcode {
             <?php foreach ($grouped as $date => $day_rows): ?>
                 <?php if ($group_by_day && $date): ?>
                     <div class="smm-day-heading smm-day-heading--compact">
-                        <span class="smm-day-name"><?php echo esc_html(SMM_Helpers::fmt_date($date)); ?></span>
+                        <span class="smm-day-name"><?php echo esc_html(SMM_Helpers::fmt_date_with_day($date)); ?></span>
                         <span class="smm-day-count">
                             <?php echo count($day_rows); ?> match<?php echo count($day_rows) === 1 ? '' : 'es'; ?>
                         </span>
