@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Soccer Match Manager
  * Description: Manage soccer matches, teams, players, locations, leagues, and competitions with conflict detection
- * Version: 7.5.4
+ * Version: 7.5.5
  * Author: Rafael Ramírez
  * License: GPL v2 or later
  * Text Domain: soccer-match-manager
@@ -10,10 +10,10 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('SMM_VERSION', '7.5.4');
+define('SMM_VERSION', '7.5.5');
 define('SMM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('SMM_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('SMM_DB_VERSION', '7.5.4');  // <-- bumped again to force migration
+define('SMM_DB_VERSION', '7.5.5');
 
 require_once SMM_PLUGIN_DIR . 'includes/class-smm-database.php';
 require_once SMM_PLUGIN_DIR . 'includes/class-smm-helpers.php';

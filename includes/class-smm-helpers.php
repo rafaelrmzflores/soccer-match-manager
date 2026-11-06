@@ -5,19 +5,39 @@ class SMM_Helpers {
         return function_exists('wp_timezone') ? wp_timezone() : new DateTimeZone('UTC');
     }
 
+    // public static function fmt_date($ymd) {
+    //     if (empty($ymd)) return '';
+    //     $ts = strtotime($ymd . ' 00:00:00');
+    //     return $ts ? wp_date('M j, Y', $ts) : $ymd;
+    // }
+
+    // Timezone fix for fmt_date
     public static function fmt_date($ymd) {
         if (empty($ymd)) return '';
-        $ts = strtotime($ymd . ' 00:00:00');
-        return $ts ? wp_date('M j, Y', $ts) : $ymd;
+        // Force formatting in UTC so it doesn't shift the date based on site TZ
+        $dt = date_create_from_format('Y-m-d', $ymd, new DateTimeZone('UTC'));
+        return $dt ? $dt->format('M j, Y') : $ymd;
     }
 
     /**
      * Format a time. Returns 'TBD' for null/empty.
      */
+    // public static function fmt_time($his) {
+    //     if (empty($his)) return 'TBD';
+    //     $ts = strtotime('2000-01-01 ' . $his);
+    //     return $ts ? wp_date('g:i A', $ts) : $his;
+    // }
+
+    // Force formatting in UTC so it doesn't shift the time based on site TZ
     public static function fmt_time($his) {
-        if (empty($his)) return 'TBD';
-        $ts = strtotime('2000-01-01 ' . $his);
-        return $ts ? wp_date('g:i A', $ts) : $his;
+        if (empty($his) || $his === '00:00:00') return 'TBD';
+        // Force formatting in UTC so it doesn't shift the time based on site TZ
+        $dt = date_create_from_format('H:i:s', $his, new DateTimeZone('UTC'));
+        if (!$dt) {
+            // Fallback for H:i
+            $dt = date_create_from_format('H:i', $his, new DateTimeZone('UTC'));
+        }
+        return $dt ? $dt->format('g:i A') : $his;
     }
 
     /**
@@ -126,7 +146,7 @@ class SMM_Helpers {
         return $hr_label . ' ' . $mins . ' min' . ($mins === 1 ? '' : 's');
     }
 
-        /**
+    /**
      * Short form: "1h 30m", "2h", "45m".
      */
     public static function fmt_duration_short($minutes) {
@@ -172,18 +192,33 @@ class SMM_Helpers {
     /**
      * Format a date with the day of the week (e.g., "Saturday, Sep 26, 2026").
      */
+    // public static function fmt_date_with_day($ymd) {
+    //     if (empty($ymd)) return '';
+    //     $ts = strtotime($ymd . ' 00:00:00');
+    //     return $ts ? wp_date('l, M j, Y', $ts) : $ymd;
+    // }
+
+    // Timezone fix for date with day
     public static function fmt_date_with_day($ymd) {
         if (empty($ymd)) return '';
-        $ts = strtotime($ymd . ' 00:00:00');
-        return $ts ? wp_date('l, M j, Y', $ts) : $ymd;
+        $dt = date_create_from_format('Y-m-d', $ymd, new DateTimeZone('UTC'));
+        return $dt ? $dt->format('l, M j, Y') : $ymd;
     }
 
     /**
      * Format a date with the day of the week (e.g., "Saturday, Sep 26, 2026").
      */
+    // public static function fmt_date_with_day_short($ymd) {
+    //     if (empty($ymd)) return '';
+    //     $ts = strtotime($ymd . ' 00:00:00');
+    //     return $ts ? wp_date('D, M j, Y', $ts) : $ymd;
+    // }
+
+    //Timezone fix for date with day short
     public static function fmt_date_with_day_short($ymd) {
         if (empty($ymd)) return '';
-        $ts = strtotime($ymd . ' 00:00:00');
-        return $ts ? wp_date('D, M j, Y', $ts) : $ymd;
+        $dt = date_create_from_format('Y-m-d', $ymd, new DateTimeZone('UTC'));
+        return $dt ? $dt->format('D, M j, Y') : $ymd;
     }
+
 }
